@@ -214,7 +214,7 @@ def get_user_browse_info(slskd, username):
         return False
 
 
-def download_mp3(slskd, username, filename):
+def download_mp3(slskd, username, filename, file_size=0):
     """Inicia download do MP3 com verificação de usuário online"""
     try:
         print(f"🔍 Verificando conectividade do usuário {username}...")
@@ -233,8 +233,13 @@ def download_mp3(slskd, username, filename):
         
         print(f"📥 Iniciando download de: {os.path.basename(filename)}")
         
-        # Sintaxe correta da API slskd
-        slskd.transfers.enqueue(username, [filename])
+        # Formato correto da API slskd: lista de dicionários com filename e size
+        file_dict = {
+            'filename': filename,
+            'size': file_size
+        }
+        
+        slskd.transfers.enqueue(username, [file_dict])
         print(f"✅ Download enfileirado com sucesso!")
         return True
         
@@ -244,7 +249,8 @@ def download_mp3(slskd, username, filename):
         # Tenta sintaxe alternativa apenas se usuário estiver online
         if user_online:
             try:
-                slskd.transfers.enqueue(username=username, files=[filename])
+                # Tenta com parâmetros nomeados
+                slskd.transfers.enqueue(username=username, files=[file_dict])
                 print(f"✅ Download enfileirado (sintaxe alternativa)!")
                 return True
             except Exception as e2:
@@ -323,13 +329,14 @@ def find_alternative_users(search_responses, target_filename, original_user):
 def smart_download_with_fallback(slskd, search_responses, best_file, best_user, search_query):
     """Tenta download inteligente com fallback para usuários alternativos"""
     filename = best_file.get('filename')
+    file_size = best_file.get('size', 0)
     
     print(f"\n🎯 Tentando download inteligente...")
     print(f"   📄 Arquivo: {os.path.basename(filename)}")
     print(f"   👤 Usuário principal: {best_user}")
     
     # Tenta download com usuário principal
-    success = download_mp3(slskd, best_user, filename)
+    success = download_mp3(slskd, best_user, filename, file_size)
     if success:
         return True
     
@@ -346,16 +353,18 @@ def smart_download_with_fallback(slskd, search_responses, best_file, best_user, 
     for i, alt in enumerate(alternatives, 1):
         alt_user = alt['username']
         alt_file = alt['file_info']
+        alt_filename = alt_file.get('filename')
+        alt_size = alt_file.get('size', 0)
         similarity = alt['similarity']
         
         print(f"\n📍 Alternativa {i}: {alt_user}")
-        print(f"   📄 Arquivo: {os.path.basename(alt_file.get('filename', ''))}")
-        print(f"   💾 Tamanho: {alt_file.get('size', 0) / 1024 / 1024:.2f} MB")
+        print(f"   📄 Arquivo: {os.path.basename(alt_filename)}")
+        print(f"   💾 Tamanho: {alt_size / 1024 / 1024:.2f} MB")
         print(f"   🎧 Bitrate: {alt_file.get('bitRate', 0)} kbps")
         print(f"   🎯 Similaridade: {similarity:.1f}%")
         
         # Tenta download com usuário alternativo
-        success = download_mp3(slskd, alt_user, alt_file.get('filename'))
+        success = download_mp3(slskd, alt_user, alt_filename, alt_size)
         if success:
             print(f"✅ Sucesso com usuário alternativo: {alt_user}")
             return True
@@ -449,44 +458,6 @@ def smart_download_with_fallback(slskd, search_responses, best_file, best_user, 
         return file_path
 
 
-def monitor_and_improve_downloads(slskd, max_wait=300):
-    """Monitora downloads e melhora nomes quando completados"""
-    if not MUSIC_TAG_AVAILABLE:
-        print("⚠️ music_tag não disponível - pulando melhoria de nomes")
-        return
-    
-    print(f"👀 Monitorando downloads por até {max_wait}s...")
-    start_time = time.time()
-    processed_files = set()
-    
-    while time.time() - start_time < max_wait:
-        try:
-            downloads = slskd.transfers.get_all_downloads()
-            
-            for download in downloads:
-                state = download.get('state', '').lower()
-                filename = download.get('filename', '')
-                local_path = download.get('localFilename', '')
-                
-                # Verifica se o download foi completado
-                if (state == 'completed' and 
-                    local_path and 
-                    local_path not in processed_files and
-                    os.path.exists(local_path) and
-                    local_path.lower().endswith('.mp3')):
-                    
-                    print(f"✅ Download completado: {os.path.basename(local_path)}")
-                    improved_path = improve_filename_with_tags(local_path)
-                    processed_files.add(local_path)
-                    processed_files.add(improved_path)
-            
-            time.sleep(5)  # Verifica a cada 5 segundos
-            
-        except Exception as e:
-            print(f"⚠️ Erro ao monitorar downloads: {e}")
-            time.sleep(10)
-    
-    print(f"⏰ Monitoramento finalizado após {max_wait}s")
 
 
 def cleanup_search(slskd, search_id):
@@ -588,20 +559,87 @@ def smart_mp3_search(slskd, query):
     return False
 
 
+def manual_cleanup_downloads(slskd):
+    """Função para limpeza manual imediata dos downloads completados"""
+    try:
+        print("🧹 LIMPEZA MANUAL DE DOWNLOADS COMPLETADOS")
+        print("=" * 50)
+        
+        # Mostra status atual
+        downloads = slskd.transfers.get_all_downloads()
+        print(f"📊 Downloads na fila: {len(downloads)}")
+        
+        completed_downloads = []
+        active_downloads = []
+        
+        for download in downloads:
+            state = download.get('state', '').lower()
+            filename = download.get('filename', '')
+            username = download.get('username', '')
+            
+            if state in ['completed', 'complete', 'finished']:
+                completed_downloads.append({
+                    'filename': os.path.basename(filename),
+                    'username': username,
+                    'state': state
+                })
+            else:
+                active_downloads.append({
+                    'filename': os.path.basename(filename),
+                    'username': username,
+                    'state': state
+                })
+        
+        print(f"✅ Downloads completados: {len(completed_downloads)}")
+        print(f"⏳ Downloads ativos: {len(active_downloads)}")
+        
+        if completed_downloads:
+            print(f"\n📋 DOWNLOADS COMPLETADOS PARA REMOVER:")
+            for i, download in enumerate(completed_downloads, 1):
+                print(f"   {i}. {download['filename']} (de {download['username']})")
+            
+            # Remove downloads completados
+            removed_count = slskd.transfers.remove_completed_downloads()
+            print(f"\n🎉 {len(completed_downloads)} downloads completados removidos!")
+        else:
+            print(f"\nℹ️ Nenhum download completado para remover")
+        
+        if active_downloads:
+            print(f"\n⏳ DOWNLOADS AINDA ATIVOS:")
+            for i, download in enumerate(active_downloads, 1):
+                print(f"   {i}. {download['filename']} - {download['state']} (de {download['username']})")
+        
+        return len(completed_downloads)
+        
+    except Exception as e:
+        print(f"❌ Erro na limpeza manual: {e}")
+        return 0
+
+
 def show_downloads(slskd):
-    """Mostra downloads ativos"""
+    """Mostra downloads ativos com opção de limpeza"""
     try:
         print(f"\n{'='*50}")
         print("📥 Downloads ativos:")
         
         downloads = slskd.transfers.get_all_downloads()
         if downloads:
+            completed_count = 0
             for i, download in enumerate(downloads, 1):
                 filename = download.get('filename', 'N/A')
                 state = download.get('state', 'N/A')
                 username = download.get('username', 'N/A')
-                print(f"   {i}. {filename}")
+                
+                if state.lower() in ['completed', 'complete', 'finished']:
+                    completed_count += 1
+                    print(f"   {i}. ✅ {os.path.basename(filename)}")
+                else:
+                    print(f"   {i}. ⏳ {os.path.basename(filename)}")
                 print(f"      👤 De: {username} | Estado: {state}")
+            
+            if completed_count > 0:
+                print(f"\n💡 {completed_count} downloads completados podem ser removidos")
+                print(f"   Use a função manual_cleanup_downloads() para limpar")
         else:
             print("   Nenhum download ativo")
     except Exception as e:
@@ -627,13 +665,7 @@ def main():
         if success:
             show_downloads(slskd)
             print(f"\n✅ Busca concluída com sucesso!")
-            
-            # Monitora downloads e melhora nomes de arquivos
-            if MUSIC_TAG_AVAILABLE:
-                print(f"\n🔄 Iniciando monitoramento para melhorar nomes...")
-                monitor_and_improve_downloads(slskd, max_wait=120)
-            else:
-                print(f"\n💡 Para melhorar nomes automaticamente, instale: pip install music-tag")
+            print(f"💡 Para limpar downloads completados manualmente, use manual_cleanup_downloads()")
         else:
             print(f"\n❌ Nenhum MP3 adequado encontrado")
     else:
@@ -650,11 +682,6 @@ def main():
             
             if success:
                 print(f"✅ Teste bem-sucedido com '{query}'")
-                
-                # Monitora e melhora nomes no modo teste também
-                if MUSIC_TAG_AVAILABLE:
-                    print(f"\n🔄 Monitorando downloads...")
-                    monitor_and_improve_downloads(slskd, max_wait=60)
                 break
             else:
                 print(f"❌ Teste falhou com '{query}'")
