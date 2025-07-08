@@ -1,1 +1,29 @@
-{}
+{
+  "555f62c309cc": {
+    "original_search": "In the end Linkin Park",
+    "normalized_search": "in the end linkin park",
+    "filename": "shared\\Linkin Park\\Meteora (2003)\\2 - Don't Stay.mp3",
+    "username": "ShockedOtter",
+    "file_size": 7522305,
+    "date": "2025-07-08T20:49:13.656090",
+    "hash": "555f62c309cc"
+  },
+  "99b9d72ffa77": {
+    "original_search": "alt-J - Breezeblocks",
+    "normalized_search": "altj breezeblocks",
+    "filename": "@@wmyfu\\Music\\Alt-J\\4 - Breezeblocks.mp3",
+    "username": "KingGomi",
+    "file_size": 10103380,
+    "date": "2025-07-08T20:50:31.321993",
+    "hash": "99b9d72ffa77"
+  },
+  "163a35e6b59c": {
+    "original_search": "alt-J - Left Hand Free",
+    "normalized_search": "altj left hand free",
+    "filename": "@@bmnla\\music\\Alt-J - Left Hand Free.mp3",
+    "username": "koshenyata",
+    "file_size": 6947570,
+    "date": "2025-07-08T20:50:41.905619",
+    "hash": "163a35e6b59c"
+  }
+}

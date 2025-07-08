@@ -23,6 +23,16 @@ except ImportError:
     print("⚠️ music_tag não encontrado - usando nomes originais")
     print("💡 Instale com: pip install music-tag")
 
+try:
+    import spotipy
+    from spotipy.oauth2 import SpotifyClientCredentials
+    SPOTIPY_AVAILABLE = True
+    print("✅ spotipy disponível para integração com Spotify")
+except ImportError:
+    SPOTIPY_AVAILABLE = False
+    print("⚠️ spotipy não encontrado - funcionalidades do Spotify desabilitadas")
+    print("💡 Instale com: pip install spotipy")
+
 
 def connectToSlskd():
     try:
@@ -195,6 +205,198 @@ def remove_from_history(search_term):
 
 
 # ==================== FIM DO SISTEMA DE HISTÓRICO ====================
+
+
+# ==================== SISTEMA DE INTEGRAÇÃO COM SPOTIFY ====================
+
+def setup_spotify_client():
+    """Configura cliente Spotify usando credenciais do .env"""
+    if not SPOTIPY_AVAILABLE:
+        print("❌ Spotipy não está disponível")
+        return None
+    
+    client_id = os.getenv('SPOTIFY_CLIENT_ID')
+    client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+    
+    if not client_id or not client_secret:
+        print("❌ Credenciais do Spotify não encontradas no .env")
+        print("💡 Configure SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET")
+        print("💡 Obtenha em: https://developer.spotify.com/dashboard/")
+        return None
+    
+    try:
+        client_credentials_manager = SpotifyClientCredentials(
+            client_id=client_id,
+            client_secret=client_secret
+        )
+        sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+        
+        # Testa a conexão
+        sp.search(q='test', type='track', limit=1)
+        print("✅ Cliente Spotify configurado com sucesso!")
+        return sp
+        
+    except Exception as e:
+        print(f"❌ Erro ao configurar cliente Spotify: {e}")
+        return None
+
+
+def extract_playlist_id(playlist_url):
+    """Extrai ID da playlist de uma URL do Spotify"""
+    # Padrões de URL do Spotify
+    patterns = [
+        r'spotify:playlist:([a-zA-Z0-9]+)',
+        r'open\.spotify\.com/playlist/([a-zA-Z0-9]+)',
+        r'spotify\.com/playlist/([a-zA-Z0-9]+)'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, playlist_url)
+        if match:
+            return match.group(1)
+    
+    # Se não encontrou padrão, assume que já é um ID
+    if re.match(r'^[a-zA-Z0-9]+$', playlist_url):
+        return playlist_url
+    
+    return None
+
+
+def get_playlist_tracks(sp, playlist_id):
+    """Obtém todas as faixas de uma playlist do Spotify"""
+    try:
+        print(f"🎵 Buscando faixas da playlist...")
+        
+        # Obtém informações da playlist
+        playlist_info = sp.playlist(playlist_id, fields='name,description,owner,tracks')
+        playlist_name = playlist_info['name']
+        owner_name = playlist_info['owner']['display_name']
+        
+        print(f"📋 Playlist: '{playlist_name}' por {owner_name}")
+        
+        tracks = []
+        results = sp.playlist_tracks(playlist_id)
+        
+        while results:
+            for item in results['items']:
+                track = item.get('track')
+                if track and track.get('type') == 'track':
+                    # Extrai informações da faixa
+                    track_name = track['name']
+                    artists = [artist['name'] for artist in track['artists']]
+                    artist_str = ', '.join(artists)
+                    
+                    # Formato: "Artista - Música"
+                    search_term = f"{artist_str} - {track_name}"
+                    
+                    track_info = {
+                        'search_term': search_term,
+                        'track_name': track_name,
+                        'artists': artists,
+                        'artist_str': artist_str,
+                        'album': track['album']['name'],
+                        'duration_ms': track['duration_ms'],
+                        'popularity': track['popularity'],
+                        'spotify_url': track['external_urls']['spotify']
+                    }
+                    
+                    tracks.append(track_info)
+            
+            # Próxima página
+            results = sp.next(results) if results['next'] else None
+        
+        print(f"✅ Encontradas {len(tracks)} faixas na playlist")
+        return tracks, playlist_name
+        
+    except Exception as e:
+        print(f"❌ Erro ao obter faixas da playlist: {e}")
+        return [], ""
+
+
+def download_playlist_tracks(slskd, tracks, playlist_name, max_tracks=None, skip_duplicates=True):
+    """Baixa todas as faixas de uma playlist"""
+    if not tracks:
+        print("❌ Nenhuma faixa para baixar")
+        return
+    
+    total_tracks = len(tracks)
+    if max_tracks:
+        tracks = tracks[:max_tracks]
+        print(f"🎯 Limitando a {max_tracks} faixas (de {total_tracks} total)")
+    
+    print(f"\n🎵 Iniciando download de {len(tracks)} faixas da playlist '{playlist_name}'")
+    print("=" * 70)
+    
+    successful_downloads = 0
+    skipped_duplicates = 0
+    failed_downloads = 0
+    
+    for i, track in enumerate(tracks, 1):
+        search_term = track['search_term']
+        
+        print(f"\n📍 [{i}/{len(tracks)}] {search_term}")
+        print(f"   💿 Álbum: {track['album']}")
+        print(f"   ⏱️ Duração: {track['duration_ms'] // 1000 // 60}:{(track['duration_ms'] // 1000) % 60:02d}")
+        
+        # Verifica duplicatas se habilitado
+        if skip_duplicates and is_duplicate_download(search_term):
+            print(f"   ⏭️ Pulando - já baixada anteriormente")
+            skipped_duplicates += 1
+            continue
+        
+        # Tenta fazer o download
+        try:
+            success = smart_mp3_search(slskd, search_term)
+            if success:
+                successful_downloads += 1
+                print(f"   ✅ Download iniciado com sucesso")
+            else:
+                failed_downloads += 1
+                print(f"   ❌ Falha no download")
+                
+        except Exception as e:
+            failed_downloads += 1
+            print(f"   ❌ Erro: {e}")
+        
+        # Pausa entre downloads para evitar sobrecarga
+        if i < len(tracks):
+            print(f"   ⏸️ Pausa de 2s...")
+            time.sleep(2)
+    
+    # Relatório final
+    print(f"\n{'='*70}")
+    print(f"📊 RELATÓRIO FINAL - Playlist: '{playlist_name}'")
+    print(f"✅ Downloads bem-sucedidos: {successful_downloads}")
+    print(f"⏭️ Duplicatas puladas: {skipped_duplicates}")
+    print(f"❌ Falhas: {failed_downloads}")
+    print(f"📊 Total processado: {len(tracks)}")
+    
+    if successful_downloads > 0:
+        print(f"\n💡 {successful_downloads} downloads foram iniciados!")
+        print(f"💡 Monitore o progresso no slskd web interface")
+
+
+def show_playlist_preview(tracks, limit=10):
+    """Mostra preview das faixas da playlist"""
+    if not tracks:
+        print("❌ Nenhuma faixa para mostrar")
+        return
+    
+    print(f"\n🎵 Preview da playlist ({min(limit, len(tracks))} de {len(tracks)} faixas):")
+    print("=" * 60)
+    
+    for i, track in enumerate(tracks[:limit], 1):
+        duration_min = track['duration_ms'] // 1000 // 60
+        duration_sec = (track['duration_ms'] // 1000) % 60
+        
+        print(f"{i:2d}. 🎵 {track['search_term']}")
+        print(f"     💿 {track['album']} | ⏱️ {duration_min}:{duration_sec:02d}")
+    
+    if len(tracks) > limit:
+        print(f"     ... e mais {len(tracks) - limit} faixas")
+
+
+# ==================== FIM DO SISTEMA SPOTIFY ====================
 
 
 def extract_artist_and_song(search_text):
@@ -936,6 +1138,11 @@ def main():
     print("   --clear-history    : Limpa todo o histórico")
     print("   --remove \"busca\"   : Remove entrada específica do histórico")
     print("   --force \"busca\"    : Força download mesmo se já baixado")
+    print("🎵 Comandos Spotify:")
+    print("   --playlist URL     : Baixa todas as músicas de uma playlist")
+    print("   --preview URL      : Mostra preview da playlist (sem baixar)")
+    print("   --playlist URL --limit N : Limita download a N músicas")
+    print("   --playlist URL --no-skip : Baixa mesmo duplicatas")
     print()
     
     # Verifica comandos especiais
@@ -956,6 +1163,84 @@ def main():
         elif first_arg == '--remove' and len(sys.argv) > 2:
             search_term = ' '.join(sys.argv[2:])
             remove_from_history(search_term)
+            return
+        
+        # Comando para preview de playlist
+        elif first_arg == '--preview' and len(sys.argv) > 2:
+            playlist_url = sys.argv[2]
+            
+            sp = setup_spotify_client()
+            if not sp:
+                return
+            
+            playlist_id = extract_playlist_id(playlist_url)
+            if not playlist_id:
+                print("❌ URL de playlist inválida")
+                print("💡 Use: https://open.spotify.com/playlist/ID ou spotify:playlist:ID")
+                return
+            
+            tracks, playlist_name = get_playlist_tracks(sp, playlist_id)
+            if tracks:
+                show_playlist_preview(tracks, limit=20)
+            return
+        
+        # Comando para baixar playlist
+        elif first_arg == '--playlist' and len(sys.argv) > 2:
+            playlist_url = sys.argv[2]
+            
+            # Processa argumentos adicionais
+            max_tracks = None
+            skip_duplicates = True
+            
+            for i, arg in enumerate(sys.argv[3:], 3):
+                if arg == '--limit' and i + 1 < len(sys.argv):
+                    try:
+                        max_tracks = int(sys.argv[i + 1])
+                    except ValueError:
+                        print("❌ Valor inválido para --limit")
+                        return
+                elif arg == '--no-skip':
+                    skip_duplicates = False
+            
+            # Configura Spotify
+            sp = setup_spotify_client()
+            if not sp:
+                return
+            
+            # Configura slskd
+            slskd = connectToSlskd()
+            if not slskd:
+                return
+            
+            # Extrai ID da playlist
+            playlist_id = extract_playlist_id(playlist_url)
+            if not playlist_id:
+                print("❌ URL de playlist inválida")
+                print("💡 Use: https://open.spotify.com/playlist/ID ou spotify:playlist:ID")
+                return
+            
+            # Obtém faixas da playlist
+            tracks, playlist_name = get_playlist_tracks(sp, playlist_id)
+            if not tracks:
+                return
+            
+            # Mostra preview antes de baixar
+            show_playlist_preview(tracks, limit=10)
+            
+            # Confirmação do usuário
+            print(f"\n🤔 Deseja baixar {len(tracks)} faixas da playlist '{playlist_name}'?")
+            if max_tracks:
+                print(f"   (limitado a {max_tracks} faixas)")
+            if not skip_duplicates:
+                print(f"   (incluindo duplicatas)")
+            
+            confirm = input("Digite 'sim' para continuar: ").lower().strip()
+            if confirm not in ['sim', 's', 'yes', 'y']:
+                print("❌ Download cancelado pelo usuário")
+                return
+            
+            # Inicia downloads
+            download_playlist_tracks(slskd, tracks, playlist_name, max_tracks, skip_duplicates)
             return
         
         # Comando para forçar download
@@ -998,7 +1283,7 @@ def main():
     else:
         # Buscas de teste
         test_queries = [
-            "In the end Linkin Park",
+            "In the end - Linkin Park",
         ]
         
         print("🧪 Modo teste - buscando MP3s...")
