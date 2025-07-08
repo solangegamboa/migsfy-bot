@@ -10,6 +10,8 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon).
 - **Filtros avançados**: Usa sintaxe correta do SoulSeek (wildcards, exclusões)
 - **Melhoria de nomes**: Renomeia arquivos usando tags de metadados
 - **Limpeza manual**: Remove downloads completados da fila
+- **🆕 Histórico de downloads**: Evita downloads duplicados automaticamente
+- **🆕 Gerenciamento de histórico**: Comandos para visualizar, limpar e forçar downloads
 
 ## 📋 Pré-requisitos
 
@@ -22,7 +24,7 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon).
 1. **Clone o repositório**:
    ```bash
    git clone <repository-url>
-   cd migsfy-bot/src
+   cd migsfy-bot
    ```
 
 2. **Instale as dependências**:
@@ -55,6 +57,21 @@ python3 slskd-mp3-search.py "Artista - Música"
 python3 slskd-mp3-search.py "Linkin Park - In the End"
 python3 slskd-mp3-search.py "Maria Rita - Como Nossos Pais"
 python3 slskd-mp3-search.py "Bohemian Rhapsody"
+```
+
+### 🆕 Comandos de histórico:
+```bash
+# Visualizar histórico de downloads
+python3 slskd-mp3-search.py --history
+
+# Forçar download mesmo se já baixado
+python3 slskd-mp3-search.py --force "Artista - Música"
+
+# Remover entrada específica do histórico
+python3 slskd-mp3-search.py --remove "Artista - Música"
+
+# Limpar todo o histórico
+python3 slskd-mp3-search.py --clear-history
 ```
 
 ### Modo teste:
@@ -92,6 +109,12 @@ python3 slskd-mp3-search.py
    - Tenta usuários alternativos se necessário
    - Usa formato correto da API slskd
 
+4. **🆕 Sistema de histórico**:
+   - Salva automaticamente downloads bem-sucedidos
+   - Evita downloads duplicados por padrão
+   - Permite forçar downloads quando necessário
+   - Histórico armazenado em `download_history.json`
+
 ## 🛠️ Funções úteis
 
 ### Limpeza manual de downloads:
@@ -101,11 +124,23 @@ slskd = connectToSlskd()
 manual_cleanup_downloads(slskd)
 ```
 
+### 🆕 Gerenciamento de histórico:
+```python
+from slskd_mp3_search import show_download_history, clear_download_history
+
+# Mostrar histórico
+show_download_history()
+
+# Limpar histórico
+clear_download_history()
+```
+
 ## 📁 Estrutura do projeto
 
 ```
-src/
+/
 ├── slskd-mp3-search.py     # Script principal
+├── download_history.json   # Histórico de downloads (criado automaticamente)
 ├── .env                    # Configurações (não commitado)
 ├── .env.example           # Template de configurações
 ├── .gitignore             # Arquivos ignorados pelo git
@@ -117,6 +152,7 @@ src/
 - Chaves sensíveis ficam no arquivo `.env`
 - `.env` está no `.gitignore` (não é commitado)
 - Use `.env.example` como template
+- Histórico de downloads é local e não contém informações sensíveis
 
 ## 🐛 Troubleshooting
 
@@ -134,6 +170,11 @@ src/
 - Usuários podem estar offline
 - Verifique logs do slskd
 - Tente reiniciar o slskd
+
+### 🆕 Problemas com histórico:
+- Arquivo `download_history.json` corrompido: delete e será recriado
+- Para ignorar histórico temporariamente: use `--force`
+- Para limpar histórico: use `--clear-history`
 
 ## 📝 Licença
 

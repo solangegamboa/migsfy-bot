@@ -5,6 +5,9 @@ import time
 import re
 import sys
 import os
+import json
+import hashlib
+from datetime import datetime
 from difflib import SequenceMatcher
 from dotenv import load_dotenv
 
@@ -40,6 +43,158 @@ def connectToSlskd():
         print(f"❌ Falha ao conectar: {e}")
         print("💡 Verifique as configurações no arquivo .env")
         return None
+
+
+# ==================== SISTEMA DE HISTÓRICO DE DOWNLOADS ====================
+
+def get_download_history_file():
+    """Retorna o caminho do arquivo de histórico"""
+    return os.path.join(os.path.dirname(__file__), 'download_history.json')
+
+
+def load_download_history():
+    """Carrega o histórico de downloads do arquivo JSON"""
+    history_file = get_download_history_file()
+    
+    if not os.path.exists(history_file):
+        return {}
+    
+    try:
+        with open(history_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"⚠️ Erro ao carregar histórico: {e}")
+        return {}
+
+
+def save_download_history(history):
+    """Salva o histórico de downloads no arquivo JSON"""
+    history_file = get_download_history_file()
+    
+    try:
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠️ Erro ao salvar histórico: {e}")
+
+
+def normalize_search_term(search_term):
+    """Normaliza termo de busca para comparação"""
+    # Remove caracteres especiais e converte para minúsculas
+    normalized = re.sub(r'[^\w\s]', '', search_term.lower())
+    # Remove espaços extras
+    normalized = ' '.join(normalized.split())
+    return normalized
+
+
+def generate_search_hash(search_term):
+    """Gera hash único para o termo de busca normalizado"""
+    normalized = normalize_search_term(search_term)
+    return hashlib.md5(normalized.encode('utf-8')).hexdigest()[:12]
+
+
+def is_duplicate_download(search_term):
+    """Verifica se já foi feito download desta música"""
+    history = load_download_history()
+    search_hash = generate_search_hash(search_term)
+    
+    if search_hash in history:
+        entry = history[search_hash]
+        print(f"🔄 Música já baixada anteriormente:")
+        print(f"   📅 Data: {entry['date']}")
+        print(f"   🎵 Busca: {entry['original_search']}")
+        print(f"   📄 Arquivo: {entry.get('filename', 'N/A')}")
+        print(f"   👤 Usuário: {entry.get('username', 'N/A')}")
+        return True
+    
+    return False
+
+
+def add_to_download_history(search_term, filename, username, file_size=0):
+    """Adiciona download ao histórico"""
+    history = load_download_history()
+    search_hash = generate_search_hash(search_term)
+    
+    entry = {
+        'original_search': search_term,
+        'normalized_search': normalize_search_term(search_term),
+        'filename': filename,
+        'username': username,
+        'file_size': file_size,
+        'date': datetime.now().isoformat(),
+        'hash': search_hash
+    }
+    
+    history[search_hash] = entry
+    save_download_history(history)
+    
+    print(f"📝 Adicionado ao histórico: {search_term}")
+
+
+def show_download_history(limit=10):
+    """Mostra histórico de downloads recentes"""
+    history = load_download_history()
+    
+    if not history:
+        print("📝 Histórico de downloads vazio")
+        return
+    
+    # Ordena por data (mais recente primeiro)
+    sorted_entries = sorted(
+        history.values(), 
+        key=lambda x: x.get('date', ''), 
+        reverse=True
+    )
+    
+    print(f"📝 Histórico de downloads (últimos {min(limit, len(sorted_entries))}):")
+    print("=" * 60)
+    
+    for i, entry in enumerate(sorted_entries[:limit], 1):
+        date_str = entry.get('date', 'N/A')
+        if date_str != 'N/A':
+            try:
+                date_obj = datetime.fromisoformat(date_str)
+                date_str = date_obj.strftime('%d/%m/%Y %H:%M')
+            except:
+                pass
+        
+        print(f"{i:2d}. 🎵 {entry['original_search']}")
+        print(f"     📅 {date_str}")
+        print(f"     📄 {os.path.basename(entry.get('filename', 'N/A'))}")
+        print(f"     👤 {entry.get('username', 'N/A')}")
+        print()
+
+
+def clear_download_history():
+    """Limpa todo o histórico de downloads"""
+    history_file = get_download_history_file()
+    
+    try:
+        if os.path.exists(history_file):
+            os.remove(history_file)
+            print("🗑️ Histórico de downloads limpo com sucesso!")
+        else:
+            print("📝 Histórico já estava vazio")
+    except Exception as e:
+        print(f"❌ Erro ao limpar histórico: {e}")
+
+
+def remove_from_history(search_term):
+    """Remove entrada específica do histórico"""
+    history = load_download_history()
+    search_hash = generate_search_hash(search_term)
+    
+    if search_hash in history:
+        removed_entry = history.pop(search_hash)
+        save_download_history(history)
+        print(f"🗑️ Removido do histórico: {removed_entry['original_search']}")
+        return True
+    else:
+        print(f"❌ Entrada não encontrada no histórico: {search_term}")
+        return False
+
+
+# ==================== FIM DO SISTEMA DE HISTÓRICO ====================
 
 
 def extract_artist_and_song(search_text):
@@ -230,8 +385,8 @@ def get_user_browse_info(slskd, username):
         return False
 
 
-def download_mp3(slskd, username, filename, file_size=0):
-    """Inicia download do MP3 com verificação de usuário online"""
+def download_mp3(slskd, username, filename, file_size=0, search_term=None):
+    """Inicia download do MP3 com verificação de usuário online e histórico"""
     try:
         print(f"🔍 Verificando conectividade do usuário {username}...")
         
@@ -257,6 +412,11 @@ def download_mp3(slskd, username, filename, file_size=0):
         
         slskd.transfers.enqueue(username, [file_dict])
         print(f"✅ Download enfileirado com sucesso!")
+        
+        # Adiciona ao histórico se o download foi bem-sucedido
+        if search_term:
+            add_to_download_history(search_term, filename, username, file_size)
+        
         return True
         
     except Exception as e:
@@ -268,6 +428,11 @@ def download_mp3(slskd, username, filename, file_size=0):
                 # Tenta com parâmetros nomeados
                 slskd.transfers.enqueue(username=username, files=[file_dict])
                 print(f"✅ Download enfileirado (sintaxe alternativa)!")
+                
+                # Adiciona ao histórico se o download foi bem-sucedido
+                if search_term:
+                    add_to_download_history(search_term, filename, username, file_size)
+                
                 return True
             except Exception as e2:
                 print(f"❌ Erro na sintaxe alternativa: {e2}")
@@ -352,7 +517,7 @@ def smart_download_with_fallback(slskd, search_responses, best_file, best_user, 
     print(f"   👤 Usuário principal: {best_user}")
     
     # Tenta download com usuário principal
-    success = download_mp3(slskd, best_user, filename, file_size)
+    success = download_mp3(slskd, best_user, filename, file_size, search_query)
     if success:
         return True
     
@@ -380,7 +545,7 @@ def smart_download_with_fallback(slskd, search_responses, best_file, best_user, 
         print(f"   🎯 Similaridade: {similarity:.1f}%")
         
         # Tenta download com usuário alternativo
-        success = download_mp3(slskd, alt_user, alt_filename, alt_size)
+        success = download_mp3(slskd, alt_user, alt_filename, alt_size, search_query)
         if success:
             print(f"✅ Sucesso com usuário alternativo: {alt_user}")
             return True
@@ -488,6 +653,104 @@ def cleanup_search(slskd, search_id):
 def smart_mp3_search(slskd, query):
     """Busca inteligente por MP3 com múltiplas variações"""
     print(f"🎯 Busca inteligente por MP3: '{query}'")
+    
+    # Verifica se já foi baixado anteriormente
+    if is_duplicate_download(query):
+        print(f"⏭️ Pulando download - música já baixada anteriormente")
+        return False
+    
+    artist, song = extract_artist_and_song(query)
+    if artist and song:
+        print(f"🎤 Artista: '{artist}' | 🎵 Música: '{song}'")
+    
+    variations = create_search_variations(query)
+    print(f"📝 {len(variations)} variações criadas")
+    
+    for i, search_term in enumerate(variations, 1):
+        print(f"\n📍 Tentativa {i}/{len(variations)}: '{search_term}'")
+        
+        # Executa a busca e verifica quantos arquivos encontrou
+        try:
+            print(f"🔍 Buscando: '{search_term}'")
+            
+            search_result = slskd.searches.search_text(search_term)
+            search_id = search_result.get('id')
+            
+            # Aguarda a busca finalizar completamente
+            search_responses = wait_for_search_completion(slskd, search_id, max_wait=int(os.getenv('SEARCH_WAIT_TIME', 25)))
+            
+            if not search_responses:
+                print("❌ Nenhuma resposta")
+                continue
+            
+            # Conta total de arquivos encontrados
+            total_files = sum(len(response.get('files', [])) for response in search_responses)
+            
+            print(f"📊 Total de arquivos encontrados: {total_files}")
+            
+            # Score mínimo configurável
+            min_score = int(os.getenv('MIN_MP3_SCORE', 15))
+            
+            # Se encontrou mais de 50 arquivos, processa e para
+            if total_files > 50:
+                print(f"🎯 Encontrados {total_files} arquivos (>50) - processando resultados...")
+                
+                best_file, best_user, best_score = find_best_mp3(search_responses, query)
+                
+                if best_file and best_score > min_score:
+                    print(f"\n🎵 Melhor MP3 (score: {best_score:.1f}):")
+                    print(f"   👤 Usuário: {best_user}")
+                    print(f"   📄 Arquivo: {best_file.get('filename')}")
+                    print(f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB")
+                    print(f"   🎧 Bitrate: {best_file.get('bitRate', 0)} kbps")
+                    
+                    # Usa download inteligente com fallback
+                    success = smart_download_with_fallback(slskd, search_responses, best_file, best_user, query)
+                    if success:
+                        print(f"✅ Sucesso com '{search_term}' ({total_files} arquivos)!")
+                        return True
+                    else:
+                        print(f"❌ Falha no download após tentar todas as alternativas")
+                        return False
+                else:
+                    print(f"❌ Nenhum MP3 adequado (melhor score: {best_score:.1f})")
+                    return False
+            
+            # Se encontrou poucos arquivos, continua com próxima variação
+            else:
+                best_file, best_user, best_score = find_best_mp3(search_responses, query)
+                
+                if best_file and best_score > min_score:
+                    print(f"\n🎵 Melhor MP3 (score: {best_score:.1f}):")
+                    print(f"   👤 Usuário: {best_user}")
+                    print(f"   📄 Arquivo: {best_file.get('filename')}")
+                    print(f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB")
+                    print(f"   🎧 Bitrate: {best_file.get('bitRate', 0)} kbps")
+                    
+                    # Usa download inteligente com fallback
+                    success = smart_download_with_fallback(slskd, search_responses, best_file, best_user, query)
+                    if success:
+                        print(f"✅ Sucesso com '{search_term}'!")
+                        return True
+                    else:
+                        print(f"❌ Falha no download - continuando...")
+                else:
+                    print(f"❌ Nenhum MP3 adequado (score: {best_score:.1f}) - continuando...")
+                
+        except Exception as e:
+            print(f"❌ Erro na busca: {e}")
+        
+        # Pausa maior entre buscas para evitar sobrecarga
+        if i < len(variations):
+            print("⏸️ Pausa entre buscas...")
+            time.sleep(3)
+    
+    return False
+
+
+def smart_mp3_search_force(slskd, query):
+    """Busca inteligente por MP3 ignorando histórico (para comando --force)"""
+    print(f"🎯 Busca inteligente por MP3 (FORÇADA): '{query}'")
     
     artist, song = extract_artist_and_song(query)
     if artist and song:
@@ -668,7 +931,52 @@ def show_downloads(slskd):
 def main():
     print("🎵 SLSKD MP3 Search & Download Tool")
     print("💡 Uso: python3 slskd-mp3-search.py [\"artista - música\"]")
+    print("💡 Comandos especiais:")
+    print("   --history          : Mostra histórico de downloads")
+    print("   --clear-history    : Limpa todo o histórico")
+    print("   --remove \"busca\"   : Remove entrada específica do histórico")
+    print("   --force \"busca\"    : Força download mesmo se já baixado")
     print()
+    
+    # Verifica comandos especiais
+    if len(sys.argv) > 1:
+        first_arg = sys.argv[1].lower()
+        
+        # Comando para mostrar histórico
+        if first_arg == '--history':
+            show_download_history()
+            return
+        
+        # Comando para limpar histórico
+        elif first_arg == '--clear-history':
+            clear_download_history()
+            return
+        
+        # Comando para remover entrada específica
+        elif first_arg == '--remove' and len(sys.argv) > 2:
+            search_term = ' '.join(sys.argv[2:])
+            remove_from_history(search_term)
+            return
+        
+        # Comando para forçar download
+        elif first_arg == '--force' and len(sys.argv) > 2:
+            custom_query = ' '.join(sys.argv[2:])
+            print(f"🎯 Forçando busca por: '{custom_query}' (ignorando histórico)")
+            
+            slskd = connectToSlskd()
+            if not slskd:
+                return
+            
+            # Busca sem verificar histórico
+            success = smart_mp3_search_force(slskd, custom_query)
+            
+            if success:
+                show_downloads(slskd)
+                print(f"\n✅ Busca forçada concluída com sucesso!")
+                print(f"💡 Para limpar downloads completados manualmente, use manual_cleanup_downloads()")
+            else:
+                print(f"\n❌ Nenhum MP3 adequado encontrado")
+            return
     
     slskd = connectToSlskd()
     if not slskd:
