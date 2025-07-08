@@ -6,6 +6,10 @@ import re
 import sys
 import os
 from difflib import SequenceMatcher
+from dotenv import load_dotenv
+
+# Carrega variáveis de ambiente
+load_dotenv()
 
 try:
     import music_tag
@@ -19,12 +23,22 @@ except ImportError:
 
 def connectToSlskd():
     try:
-        slskd = slskd_api.SlskdClient(host='192.168.15.100', api_key='ffa07bf8-3a02-4fbc-8be3-5618f58f1d5e', url_base='http://192.168.15.100:5030')
+        # Usa variáveis de ambiente
+        host = os.getenv('SLSKD_HOST', '192.168.15.100')
+        api_key = os.getenv('SLSKD_API_KEY')
+        url_base = os.getenv('SLSKD_URL_BASE', f'http://{host}:5030')
+        
+        if not api_key:
+            print("❌ SLSKD_API_KEY não encontrada no arquivo .env")
+            return None
+        
+        slskd = slskd_api.SlskdClient(host=host, api_key=api_key, url_base=url_base)
         app_state = slskd.application.state()
-        print("✅ Conectado com sucesso ao slskd!")
+        print(f"✅ Conectado com sucesso ao slskd em {host}!")
         return slskd
     except Exception as e:
         print(f"❌ Falha ao conectar: {e}")
+        print("💡 Verifique as configurações no arquivo .env")
         return None
 
 
@@ -82,7 +96,9 @@ def create_search_variations(search_text):
             seen.add(var)
             unique_variations.append(var)
     
-    return unique_variations[:8]  # Mantém 8 variações eficientes
+    # Usa configuração do ambiente ou padrão
+    max_variations = int(os.getenv('MAX_SEARCH_VARIATIONS', 8))
+    return unique_variations[:max_variations]
 
 
 def calculate_similarity(search_text, filename):
@@ -491,7 +507,7 @@ def smart_mp3_search(slskd, query):
             search_id = search_result.get('id')
             
             # Aguarda a busca finalizar completamente
-            search_responses = wait_for_search_completion(slskd, search_id, max_wait=25)
+            search_responses = wait_for_search_completion(slskd, search_id, max_wait=int(os.getenv('SEARCH_WAIT_TIME', 25)))
             
             if not search_responses:
                 print("❌ Nenhuma resposta")
@@ -502,13 +518,16 @@ def smart_mp3_search(slskd, query):
             
             print(f"📊 Total de arquivos encontrados: {total_files}")
             
+            # Score mínimo configurável
+            min_score = int(os.getenv('MIN_MP3_SCORE', 15))
+            
             # Se encontrou mais de 50 arquivos, processa e para
             if total_files > 50:
                 print(f"🎯 Encontrados {total_files} arquivos (>50) - processando resultados...")
                 
                 best_file, best_user, best_score = find_best_mp3(search_responses, query)
                 
-                if best_file and best_score > 15:
+                if best_file and best_score > min_score:
                     print(f"\n🎵 Melhor MP3 (score: {best_score:.1f}):")
                     print(f"   👤 Usuário: {best_user}")
                     print(f"   📄 Arquivo: {best_file.get('filename')}")
@@ -531,7 +550,7 @@ def smart_mp3_search(slskd, query):
             else:
                 best_file, best_user, best_score = find_best_mp3(search_responses, query)
                 
-                if best_file and best_score > 15:
+                if best_file and best_score > min_score:
                     print(f"\n🎵 Melhor MP3 (score: {best_score:.1f}):")
                     print(f"   👤 Usuário: {best_user}")
                     print(f"   📄 Arquivo: {best_file.get('filename')}")
