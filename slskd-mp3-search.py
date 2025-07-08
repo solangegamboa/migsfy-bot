@@ -1143,6 +1143,8 @@ def main():
     print("   --preview URL      : Mostra preview da playlist (sem baixar)")
     print("   --playlist URL --limit N : Limita download a N músicas")
     print("   --playlist URL --no-skip : Baixa mesmo duplicatas")
+    print("   --playlist URL --auto    : Baixa sem confirmação")
+    print("   --playlist URL --auto --limit N --no-skip : Combina opções")
     print()
     
     # Verifica comandos especiais
@@ -1191,6 +1193,7 @@ def main():
             # Processa argumentos adicionais
             max_tracks = None
             skip_duplicates = True
+            auto_confirm = False
             
             for i, arg in enumerate(sys.argv[3:], 3):
                 if arg == '--limit' and i + 1 < len(sys.argv):
@@ -1201,6 +1204,8 @@ def main():
                         return
                 elif arg == '--no-skip':
                     skip_duplicates = False
+                elif arg == '--auto' or arg == '--yes' or arg == '-y':
+                    auto_confirm = True
             
             # Configura Spotify
             sp = setup_spotify_client()
@@ -1227,17 +1232,24 @@ def main():
             # Mostra preview antes de baixar
             show_playlist_preview(tracks, limit=10)
             
-            # Confirmação do usuário
-            print(f"\n🤔 Deseja baixar {len(tracks)} faixas da playlist '{playlist_name}'?")
-            if max_tracks:
-                print(f"   (limitado a {max_tracks} faixas)")
-            if not skip_duplicates:
-                print(f"   (incluindo duplicatas)")
-            
-            confirm = input("Digite 'sim' para continuar: ").lower().strip()
-            if confirm not in ['sim', 's', 'yes', 'y']:
-                print("❌ Download cancelado pelo usuário")
-                return
+            # Confirmação do usuário (se não for automático)
+            if not auto_confirm:
+                print(f"\n🤔 Deseja baixar {len(tracks)} faixas da playlist '{playlist_name}'?")
+                if max_tracks:
+                    print(f"   (limitado a {max_tracks} faixas)")
+                if not skip_duplicates:
+                    print(f"   (incluindo duplicatas)")
+                
+                confirm = input("Digite 'sim' para continuar: ").lower().strip()
+                if confirm not in ['sim', 's', 'yes', 'y']:
+                    print("❌ Download cancelado pelo usuário")
+                    return
+            else:
+                print(f"\n🚀 Iniciando download automático de {len(tracks)} faixas da playlist '{playlist_name}'")
+                if max_tracks:
+                    print(f"   (limitado a {max_tracks} faixas)")
+                if not skip_duplicates:
+                    print(f"   (incluindo duplicatas)")
             
             # Inicia downloads
             download_playlist_tracks(slskd, tracks, playlist_name, max_tracks, skip_duplicates)
@@ -1281,26 +1293,10 @@ def main():
         else:
             print(f"\n❌ Nenhum MP3 adequado encontrado")
     else:
-        # Buscas de teste
-        test_queries = [
-            "In the end - Linkin Park",
-        ]
-        
-        print("🧪 Modo teste - buscando MP3s...")
-        
-        for query in test_queries:
-            print(f"\n{'='*50}")
-            success = smart_mp3_search(slskd, query)
-            
-            if success:
-                print(f"✅ Teste bem-sucedido com '{query}'")
-                break
-            else:
-                print(f"❌ Teste falhou com '{query}'")
-            
-            time.sleep(2)
-        
-        show_downloads(slskd)
+        # Sem parâmetros - apenas mostra ajuda
+        print("💡 Nenhum parâmetro fornecido.")
+        print("💡 Use um dos comandos acima ou forneça um termo de busca.")
+        print("💡 Exemplo: python3 slskd-mp3-search.py \"Artista - Música\"")
 
 
 if __name__ == "__main__":

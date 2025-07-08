@@ -94,6 +94,9 @@ python3 slskd-mp3-search.py --preview "https://open.spotify.com/playlist/37i9dQZ
 # Baixar playlist completa
 python3 slskd-mp3-search.py --playlist "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
 
+# Baixar automaticamente sem confirmação
+python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --auto
+
 # Baixar apenas as primeiras 10 músicas
 python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --limit 10
 
@@ -101,7 +104,7 @@ python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --limit 10
 python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --no-skip
 
 # Combinar opções
-python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --limit 5 --no-skip
+python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --limit 5 --no-skip --auto
 ```
 
 ### Formatos de URL Spotify aceitos:
@@ -119,8 +122,9 @@ spotify:playlist:37i9dQZF1DXcBWIGoYBM5M
 37i9dQZF1DXcBWIGoYBM5M
 ```
 
-### Modo teste:
+### Ajuda e comandos:
 ```bash
+# Mostra ajuda e comandos disponíveis
 python3 slskd-mp3-search.py
 ```
 
@@ -261,6 +265,9 @@ python3 slskd-mp3-search.py --preview "https://open.spotify.com/playlist/37i9dQZ
 
 # Download completo
 python3 slskd-mp3-search.py --playlist "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+
+# Download automático (sem confirmação)
+python3 slskd-mp3-search.py --playlist "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M" --auto
 ```
 
 ### Cenário 2: Playlist grande (teste limitado)
@@ -268,14 +275,26 @@ python3 slskd-mp3-search.py --playlist "https://open.spotify.com/playlist/37i9dQ
 # Testar com 5 músicas primeiro
 python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --limit 5
 
-# Se funcionou bem, baixar mais
-python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --limit 20
+# Se funcionou bem, baixar mais automaticamente
+python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --limit 20 --auto
 ```
 
 ### Cenário 3: Re-download de playlist
 ```bash
 # Forçar download mesmo de músicas já baixadas
-python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --no-skip
+python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --no-skip --auto
+```
+
+### Cenário 4: Download automatizado completo
+```bash
+# Download completo sem interação do usuário
+python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --auto
+
+# Download limitado e automatizado
+python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --limit 10 --auto
+
+# Download completo incluindo duplicatas, sem confirmação
+python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --no-skip --auto
 ```
 
 ## 📝 Licença
