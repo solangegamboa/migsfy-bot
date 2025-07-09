@@ -25,7 +25,8 @@ except ImportError:
 try:
     from slskd_mp3_search import (
         connectToSlskd, 
-        smart_mp3_search, 
+        smart_mp3_search,
+        smart_album_search,
         setup_spotify_client, 
         setup_spotify_user_client,
         extract_playlist_id, 
@@ -48,6 +49,7 @@ except ImportError:
     # Importa as funções necessárias
     connectToSlskd = slskd_module.connectToSlskd
     smart_mp3_search = slskd_module.smart_mp3_search
+    smart_album_search = slskd_module.smart_album_search
     setup_spotify_client = slskd_module.setup_spotify_client
     setup_spotify_user_client = slskd_module.setup_spotify_user_client
     extract_playlist_id = slskd_module.extract_playlist_id
@@ -209,12 +211,14 @@ Bem-vindo! Este bot permite buscar e baixar músicas usando slskd e Spotify.
 **Comandos disponíveis:**
 /help - Mostra esta ajuda
 /search <termo> - Busca uma música
+/album <artista - álbum> - Busca álbum completo
 /spotify <url> - Baixa playlist do Spotify
 /history - Mostra histórico de downloads
 /status - Status dos serviços
 
 **Exemplos:**
 `/search Radiohead - Creep`
+`/album Pink Floyd - The Dark Side of the Moon`
 `/spotify https://open.spotify.com/playlist/...`
 
 💡 Use apenas os comandos acima para interagir com o bot.
@@ -234,6 +238,10 @@ Bem-vindo! Este bot permite buscar e baixar músicas usando slskd e Spotify.
 `/search <termo>` - Busca específica
 Exemplo: `/search Linkin Park - In the End`
 
+**Busca de Álbum:**
+`/album <artista - álbum>` - Busca álbum completo
+Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
+
 **Spotify:**
 `/spotify <url>` - Baixa playlist
 `/spotify <url> limit=10` - Limita downloads
@@ -250,6 +258,7 @@ Exemplo: `/search Linkin Park - In the End`
 
 **Exemplos completos:**
 `/search Radiohead - Creep`
+`/album Beatles - Abbey Road`
 `/spotify https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M`
 `/spotify https://spotify.com/playlist/ID limit=5 remove=yes`
         """
@@ -291,6 +300,18 @@ Exemplo: `/search Linkin Park - In the End`
         
         search_term = ' '.join(context.args)
         await self._handle_music_search(update, search_term)
+    
+    async def album_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Comando /album"""
+        if not self._is_authorized(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text("❌ Use: /album <artista - álbum>\n\nExemplos:\n• `/album Pink Floyd - The Dark Side of the Moon`\n• `/album Beatles - Abbey Road`\n• `/album Nirvana - Nevermind`", parse_mode='Markdown')
+            return
+        
+        album_query = ' '.join(context.args)
+        await self._handle_album_search(update, album_query)
     
     async def spotify_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /spotify"""
@@ -461,6 +482,27 @@ Exemplo: `/search Linkin Park - In the End`
                 
         except Exception as e:
             await progress_msg.edit_text(f"❌ Erro na busca: {e}")
+    
+    async def _handle_album_search(self, update: Update, album_query: str):
+        """Manipula busca de álbum"""
+        if not self.slskd:
+            await update.message.reply_text("❌ SLSKD não está conectado")
+            return
+        
+        # Mensagem de progresso
+        progress_msg = await update.message.reply_text(f"💿 Buscando álbum: {album_query}")
+        
+        try:
+            # Executa busca de álbum
+            success = smart_album_search(self.slskd, album_query)
+            
+            if success:
+                await progress_msg.edit_text(f"✅ Álbum encontrado: {album_query}\n💿 Download em andamento no slskd\n💡 Verifique o progresso na interface web")
+            else:
+                await progress_msg.edit_text(f"❌ Nenhum álbum encontrado para: {album_query}\n💡 Tente:\n• Verificar a grafia\n• Usar formato 'Artista - Álbum'\n• Buscar por música individual com /search")
+                
+        except Exception as e:
+            await progress_msg.edit_text(f"❌ Erro na busca de álbum: {e}")
     
     async def _handle_playlist_download(self, update: Update, playlist_url: str, options: dict):
         """Manipula download de playlist"""
@@ -646,6 +688,7 @@ Exemplo: `/search Linkin Park - In the End`
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("status", self.status_command))
         application.add_handler(CommandHandler("search", self.search_command))
+        application.add_handler(CommandHandler("album", self.album_command))
         application.add_handler(CommandHandler("spotify", self.spotify_command))
         application.add_handler(CommandHandler("history", self.history_command))
         application.add_handler(CommandHandler("clear_history", self.clear_history_command))

@@ -624,6 +624,152 @@ def extract_artist_and_song(search_text):
     return search_text.strip(), ""
 
 
+def extract_artist_and_album(search_text):
+    """Extrai artista e álbum do texto de busca"""
+    separators = [' - ', ' – ', ' — ', ': ', ' | ']
+    
+    for sep in separators:
+        if sep in search_text:
+            parts = search_text.split(sep, 1)
+            if len(parts) == 2:
+                artist = parts[0].strip()
+                album = parts[1].strip()
+                return artist, album
+    
+    return search_text.strip(), ""
+
+
+def is_album_search(search_text):
+    """Detecta se a busca é por álbum baseado em palavras-chave"""
+    album_keywords = [
+        'album', 'álbum', 'lp', 'ep', 'discography', 'discografia',
+        'complete', 'completo', 'collection', 'coleção', 'anthology',
+        'antologia', 'greatest hits', 'best of', 'compilation', 'compilação'
+    ]
+    
+    search_lower = search_text.lower()
+    
+    # Verifica se contém palavras-chave de álbum
+    for keyword in album_keywords:
+        if keyword in search_lower:
+            return True
+    
+    # Verifica se tem formato "Artista - Algo" e o "Algo" parece ser álbum
+    artist, potential_album = extract_artist_and_album(search_text)
+    if artist and potential_album:
+        # Lista de palavras que indicam que é uma música, não álbum
+        song_indicators = [
+            'feat', 'ft', 'featuring', 'remix', 'version', 'live', 'acoustic',
+            'radio edit', 'extended', 'instrumental', 'cover', 'demo',
+            'unplugged', 'remaster', 'single', 'edit'
+        ]
+        
+        potential_album_lower = potential_album.lower()
+        
+        # Se tem indicadores de música, não é álbum
+        has_song_indicators = any(indicator in potential_album_lower for indicator in song_indicators)
+        if has_song_indicators:
+            return False
+        
+        # Lista de músicas famosas conhecidas (para evitar falsos positivos)
+        famous_songs = [
+            'comfortably numb', 'hey jude', 'bohemian rhapsody', 'creep',
+            'so what', 'stairway to heaven', 'imagine', 'like a rolling stone',
+            'satisfaction', 'yesterday', 'purple haze', 'good vibrations',
+            'respect', 'what\'s going on', 'smells like teen spirit',
+            'billie jean', 'hotel california', 'sweet child o\' mine'
+        ]
+        
+        # Se é uma música famosa conhecida, definitivamente não é álbum
+        if potential_album_lower in famous_songs:
+            return False
+        
+        # Lista de álbuns famosos conhecidos (para melhorar detecção)
+        famous_albums = [
+            'the dark side of the moon', 'abbey road', 'nevermind', 'ok computer',
+            'kind of blue', 'pet sounds', 'sgt pepper', 'the wall', 'thriller',
+            'back in black', 'rumours', 'led zeppelin iv', 'the joshua tree',
+            'born to run', 'purple rain', 'blonde on blonde', 'revolver',
+            'what\'s going on', 'exile on main st', 'london calling'
+        ]
+        
+        # Se é um álbum famoso conhecido, definitivamente é álbum
+        if potential_album_lower in famous_albums:
+            return True
+        
+        # Heurísticas para detectar álbuns:
+        # 1. Se tem 3-4 palavras e não tem indicadores de música, provavelmente é álbum
+        word_count = len(potential_album.split())
+        if 3 <= word_count <= 4 and not has_song_indicators:
+            return True
+        
+        # 2. Se tem 2 palavras, só considera álbum se não for música conhecida
+        if word_count == 2 and not has_song_indicators:
+            return True
+        
+        # 3. Se tem apenas 1 palavra, só considera se for álbum conhecido
+        if word_count == 1:
+            single_word_albums = [
+                'nevermind', 'thriller', 'rumours', 'revolver', 'blonde',
+                'purple', 'born', 'exile', 'london', 'iv', 'blue'
+            ]
+            if potential_album_lower in single_word_albums:
+                return True
+    
+    return False
+
+
+def create_album_search_variations(search_text):
+    """Cria variações de busca específicas para álbuns"""
+    artist, album = extract_artist_and_album(search_text)
+    
+    variations = []
+    
+    if artist and album:
+        # PRIORIDADE 1: Busca por diretório/pasta do álbum
+        variations.extend([
+            f"{artist} {album}",                    # Busca básica
+            f'"{artist}" "{album}"',                # Termos exatos
+            f"{artist} - {album}",                  # Com separador
+            f"{album} {artist}",                    # Ordem invertida
+        ])
+        
+        # PRIORIDADE 2: Busca por arquivos do álbum
+        variations.extend([
+            f"{artist} {album} *.mp3",              # Arquivos MP3 do álbum
+            f"{artist} {album} -single -remix",     # Excluindo singles e remixes
+            f"{artist} {album} *.flac",             # Arquivos FLAC
+            f'"{album}" "{artist}" *.mp3',          # Ordem invertida com MP3
+        ])
+        
+        # PRIORIDADE 3: Variações com wildcards
+        variations.extend([
+            f"{artist[:4]}* {album[:4]}*",          # Wildcards truncados
+            f"*{artist}* *{album}*",                # Wildcards completos
+            f"{artist} *{album}*",                  # Wildcard só no álbum
+            f"*{artist}* {album}",                  # Wildcard só no artista
+        ])
+    else:
+        # Para buscas simples de álbum
+        variations.extend([
+            f"{search_text}",                       # Busca original
+            f'"{search_text}"',                     # Termo exato
+            f"{search_text} *.mp3",                 # Com MP3
+            f"{search_text} album",                 # Com palavra álbum
+            f"*{search_text}*",                     # Com wildcards
+        ])
+    
+    # Remove duplicatas mantendo ordem
+    seen = set()
+    unique_variations = []
+    for var in variations:
+        if var not in seen:
+            seen.add(var)
+            unique_variations.append(var)
+    
+    return unique_variations
+
+
 def create_search_variations(search_text):
     """Cria variações de busca priorizando música sem artista primeiro"""
     artist, song = extract_artist_and_song(search_text)
@@ -966,6 +1112,9 @@ def smart_download_with_fallback(slskd, search_responses, best_file, best_user, 
     
     print(f"❌ Todos os usuários alternativos falharam")
     return False
+
+
+def improve_filename_with_tags(file_path):
     """Melhora o nome do arquivo usando tags de metadados"""
     if not MUSIC_TAG_AVAILABLE or not os.path.exists(file_path):
         return file_path
@@ -1064,6 +1213,12 @@ def cleanup_search(slskd, search_id):
 
 def smart_mp3_search(slskd, query):
     """Busca inteligente por MP3 com múltiplas variações"""
+    
+    # Detecta automaticamente se é busca por álbum
+    if is_album_search(query):
+        print(f"💿 Detectada busca por ÁLBUM: '{query}'")
+        return smart_album_search(slskd, query)
+    
     print(f"🎯 Busca inteligente por MP3: '{query}'")
     
     # Verifica se já foi baixado anteriormente
@@ -1156,6 +1311,200 @@ def smart_mp3_search(slskd, query):
         if i < len(variations):
             print("⏸️ Pausa entre buscas...")
             time.sleep(3)
+    
+    return False
+
+
+def smart_album_search(slskd, query):
+    """Busca inteligente por álbum com múltiplas variações"""
+    print(f"💿 Busca inteligente por ÁLBUM: '{query}'")
+    
+    # Verifica se já foi baixado anteriormente
+    if is_duplicate_download(query):
+        print(f"⏭️ Pulando download - álbum já baixado anteriormente")
+        return False
+    
+    artist, album = extract_artist_and_album(query)
+    if artist and album:
+        print(f"🎤 Artista: '{artist}' | 💿 Álbum: '{album}'")
+    
+    variations = create_album_search_variations(query)
+    print(f"📝 {len(variations)} variações criadas para álbum")
+    
+    best_results = []
+    
+    for i, search_term in enumerate(variations, 1):
+        print(f"\n📍 Tentativa {i}/{len(variations)}: '{search_term}'")
+        
+        try:
+            print(f"🔍 Buscando álbum: '{search_term}'")
+            
+            search_result = slskd.searches.search_text(search_term)
+            search_id = search_result.get('id')
+            
+            # Aguarda a busca finalizar
+            search_responses = wait_for_search_completion(slskd, search_id, max_wait=int(os.getenv('SEARCH_WAIT_TIME', 25)))
+            
+            if not search_responses:
+                print("❌ Nenhuma resposta")
+                continue
+            
+            # Conta total de arquivos encontrados
+            total_files = sum(len(response.get('files', [])) for response in search_responses)
+            print(f"📊 Total de arquivos encontrados: {total_files}")
+            
+            if total_files > 0:
+                # Para álbuns, procura por múltiplos arquivos do mesmo usuário/diretório
+                album_candidates = find_album_candidates(search_responses, query)
+                
+                if album_candidates:
+                    print(f"💿 Encontrados {len(album_candidates)} candidatos a álbum")
+                    
+                    # Ordena por número de faixas e qualidade
+                    album_candidates.sort(key=lambda x: (x['track_count'], x['avg_bitrate']), reverse=True)
+                    
+                    best_album = album_candidates[0]
+                    print(f"\n🎵 Melhor álbum encontrado:")
+                    print(f"   👤 Usuário: {best_album['username']}")
+                    print(f"   📁 Diretório: {best_album['directory']}")
+                    print(f"   🎵 Faixas: {best_album['track_count']}")
+                    print(f"   🎧 Bitrate médio: {best_album['avg_bitrate']:.0f} kbps")
+                    print(f"   💾 Tamanho total: {best_album['total_size'] / 1024 / 1024:.1f} MB")
+                    
+                    # Pergunta se quer baixar o álbum completo
+                    print(f"\n🤔 Deseja baixar o álbum completo ({best_album['track_count']} faixas)?")
+                    confirm = input("Digite 'sim' para continuar: ").lower().strip()
+                    
+                    if confirm in ['sim', 's', 'yes', 'y']:
+                        return download_album_tracks(slskd, best_album, query)
+                    else:
+                        print("❌ Download cancelado pelo usuário")
+                        return False
+                
+                # Se não encontrou álbum completo, tenta download individual
+                best_file, best_user, best_score = find_best_mp3(search_responses, query)
+                
+                if best_file and best_score > 10:  # Score mais baixo para álbuns
+                    print(f"\n🎵 Arquivo individual encontrado (score: {best_score:.1f}):")
+                    print(f"   👤 Usuário: {best_user}")
+                    print(f"   📄 Arquivo: {best_file.get('filename')}")
+                    
+                    success = smart_download_with_fallback(slskd, search_responses, best_file, best_user, query)
+                    if success:
+                        print(f"✅ Sucesso com '{search_term}'!")
+                        return True
+        
+        except Exception as e:
+            print(f"❌ Erro na busca: {e}")
+        
+        # Pausa entre buscas
+        if i < len(variations):
+            print("⏸️ Pausa entre buscas...")
+            time.sleep(3)
+    
+    return False
+
+
+def find_album_candidates(search_responses, query):
+    """Encontra candidatos a álbum completo nos resultados de busca"""
+    candidates = {}
+    
+    for response in search_responses:
+        username = response.get('username', '')
+        files = response.get('files', [])
+        
+        if not files:
+            continue
+        
+        # Agrupa arquivos por diretório
+        directories = {}
+        for file_info in files:
+            filename = file_info.get('filename', '')
+            if not filename.lower().endswith('.mp3'):
+                continue
+            
+            # Extrai diretório do arquivo
+            directory = os.path.dirname(filename)
+            if directory not in directories:
+                directories[directory] = []
+            directories[directory].append(file_info)
+        
+        # Analisa cada diretório
+        for directory, dir_files in directories.items():
+            if len(dir_files) < 3:  # Mínimo 3 faixas para ser considerado álbum
+                continue
+            
+            # Calcula estatísticas do diretório
+            total_size = sum(f.get('size', 0) for f in dir_files)
+            bitrates = [f.get('bitRate', 0) for f in dir_files if f.get('bitRate', 0) > 0]
+            avg_bitrate = sum(bitrates) / len(bitrates) if bitrates else 0
+            
+            # Cria chave única para o candidato
+            candidate_key = f"{username}:{directory}"
+            
+            if candidate_key not in candidates:
+                candidates[candidate_key] = {
+                    'username': username,
+                    'directory': directory,
+                    'track_count': len(dir_files),
+                    'total_size': total_size,
+                    'avg_bitrate': avg_bitrate,
+                    'files': dir_files
+                }
+    
+    # Filtra candidatos com pelo menos 5 faixas ou mais de 50MB
+    good_candidates = []
+    for candidate in candidates.values():
+        if (candidate['track_count'] >= 5 or 
+            candidate['total_size'] > 50 * 1024 * 1024):  # 50MB
+            good_candidates.append(candidate)
+    
+    return good_candidates
+
+
+def download_album_tracks(slskd, album_info, search_term):
+    """Baixa todas as faixas de um álbum"""
+    username = album_info['username']
+    files = album_info['files']
+    
+    print(f"\n📥 Iniciando download de {len(files)} faixas do álbum...")
+    
+    successful_downloads = 0
+    failed_downloads = 0
+    
+    for i, file_info in enumerate(files, 1):
+        filename = file_info.get('filename', '')
+        file_size = file_info.get('size', 0)
+        
+        print(f"\n📍 [{i}/{len(files)}] {os.path.basename(filename)}")
+        print(f"   💾 Tamanho: {file_size / 1024 / 1024:.2f} MB")
+        print(f"   🎧 Bitrate: {file_info.get('bitRate', 0)} kbps")
+        
+        # Tenta fazer o download
+        success = download_mp3(slskd, username, filename, file_size, f"{search_term} - {os.path.basename(filename)}")
+        
+        if success:
+            successful_downloads += 1
+            print(f"   ✅ Download iniciado com sucesso")
+        else:
+            failed_downloads += 1
+            print(f"   ❌ Falha no download")
+        
+        # Pausa entre downloads
+        if i < len(files):
+            time.sleep(1)
+    
+    # Relatório final
+    print(f"\n{'='*50}")
+    print(f"📊 RELATÓRIO FINAL - Álbum")
+    print(f"✅ Downloads bem-sucedidos: {successful_downloads}")
+    print(f"❌ Falhas: {failed_downloads}")
+    print(f"📊 Total de faixas: {len(files)}")
+    
+    # Adiciona ao histórico se pelo menos metade foi baixada com sucesso
+    if successful_downloads >= len(files) // 2:
+        add_to_download_history(search_term, f"Álbum: {album_info['directory']}", username, album_info['total_size'])
+        return True
     
     return False
 
@@ -1446,6 +1795,9 @@ def main():
     print("   --clear-history    : Limpa todo o histórico")
     print("   --remove \"busca\"   : Remove entrada específica do histórico")
     print("   --force \"busca\"    : Força download mesmo se já baixado")
+    print("💿 Busca por álbum:")
+    print("   --album \"Artista - Álbum\" : Busca álbum completo")
+    print("   \"Artista - Nome Album\"     : Detecção automática de álbum")
     print("🎵 Comandos Spotify:")
     print("   --playlist URL     : Baixa todas as músicas de uma playlist")
     print("   --preview URL      : Mostra preview da playlist (sem baixar)")
@@ -1493,6 +1845,34 @@ def main():
         elif first_arg == '--remove' and len(sys.argv) > 2:
             search_term = ' '.join(sys.argv[2:])
             remove_from_history(search_term)
+            return
+        
+        # Comando para busca de álbum
+        elif first_arg == '--album' and len(sys.argv) > 2:
+            album_query = ' '.join(sys.argv[2:])
+            print(f"💿 Forçando busca por álbum: '{album_query}'")
+            
+            slskd = connectToSlskd()
+            if not slskd:
+                return
+            
+            # Verifica se deve desabilitar limpeza automática
+            auto_cleanup = '--no-auto-cleanup' not in sys.argv
+            
+            success = smart_album_search(slskd, album_query)
+            
+            if success:
+                show_downloads(slskd)
+                print(f"\n✅ Busca de álbum concluída com sucesso!")
+                
+                if auto_cleanup:
+                    print(f"🧹 Iniciando limpeza automática de downloads completados...")
+                    time.sleep(5)  # Aguarda downloads começarem
+                    monitor_and_cleanup_downloads(slskd, max_wait=600, check_interval=15)  # 10 min
+                else:
+                    print(f"💡 Para limpar downloads completados manualmente, use --cleanup")
+            else:
+                print(f"\n❌ Nenhum álbum adequado encontrado")
             return
         
         # Comando para preview de playlist

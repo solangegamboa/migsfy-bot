@@ -16,6 +16,29 @@ Este arquivo contém exemplos práticos de como usar o bot do Telegram.
 
 **⚠️ Importante:** Sempre use o comando `/search` seguido do termo de busca.
 
+## 💿 Busca de Álbum
+
+### Comando: `/album`
+
+```
+/album Pink Floyd - The Dark Side of the Moon
+/album Beatles - Abbey Road
+/album Nirvana - Nevermind
+/album Led Zeppelin - IV
+/album Queen - A Night at the Opera
+/album Radiohead - OK Computer
+/album Miles Davis - Kind of Blue
+/album Bob Dylan - Highway 61 Revisited
+```
+
+**💡 Dicas para álbuns:**
+- Use o formato "Artista - Álbum"
+- Álbuns famosos têm maior chance de sucesso
+- O bot detecta automaticamente se é álbum ou música
+- Álbuns baixam múltiplas faixas automaticamente
+
+**⚠️ Importante:** Sempre use o comando `/album` seguido do nome do álbum.
+
 ## 🎵 Playlists do Spotify
 
 ### Comando: `/spotify`

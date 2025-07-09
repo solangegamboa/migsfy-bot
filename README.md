@@ -5,6 +5,7 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
 ## 🚀 Funcionalidades
 
 - **Busca inteligente**: Prioriza busca por música sem artista para mais resultados
+- **🆕 Busca por álbum**: Detecta e baixa álbuns completos automaticamente
 - **Verificação de usuário**: Confirma se usuário está online antes do download
 - **Sistema de fallback**: Tenta usuários alternativos automaticamente
 - **Filtros avançados**: Usa sintaxe correta do SoulSeek (wildcards, exclusões)
@@ -109,11 +110,23 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
 python3 slskd-mp3-search.py "Artista - Música"
 ```
 
+### 💿 Busca por álbum:
+```bash
+# Busca específica por álbum
+python3 slskd-mp3-search.py --album "Pink Floyd - The Dark Side of the Moon"
+
+# Detecção automática (palavras-chave: album, lp, ep, discography, etc.)
+python3 slskd-mp3-search.py "Beatles - Abbey Road"
+python3 slskd-mp3-search.py "Radiohead - OK Computer Album"
+python3 slskd-mp3-search.py "Led Zeppelin Discography"
+```
+
 ### Exemplos:
 ```bash
 python3 slskd-mp3-search.py "Linkin Park - In the End"
 python3 slskd-mp3-search.py "Maria Rita - Como Nossos Pais"
 python3 slskd-mp3-search.py "Bohemian Rhapsody"
+python3 slskd-mp3-search.py --album "Queen - A Night at the Opera"
 ```
 
 ### 🧹 Comandos de limpeza de downloads:

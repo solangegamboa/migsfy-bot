@@ -79,6 +79,16 @@ Para descobrir seu ID do Telegram:
 /search Linkin Park - In the End
 ```
 
+### 💿 Busca de Álbum
+
+```
+# Busca álbum completo
+/album Pink Floyd - The Dark Side of the Moon
+/album Beatles - Abbey Road
+/album Nirvana - Nevermind
+/album Led Zeppelin - IV
+```
+
 ### Playlists do Spotify
 
 ```
