@@ -19,6 +19,20 @@ run:
 		-v $(PWD)/cache:/app/cache \
 		$(IMAGE_NAME):$(VERSION)
 
+# Run Telegram bot
+telegram-bot:
+	@echo "🤖 Starting Telegram bot..."
+	docker run --rm -it \
+		-v $(PWD)/.env:/app/.env:ro \
+		-v $(PWD)/data:/app/data \
+		-v $(PWD)/cache:/app/cache \
+		$(IMAGE_NAME):$(VERSION) --telegram-bot
+
+# Run Telegram bot locally (without Docker)
+telegram-bot-local:
+	@echo "🤖 Starting Telegram bot locally..."
+	./run-telegram-bot.sh
+
 # Run with docker-compose
 up:
 	@echo "🚀 Starting with docker-compose..."
@@ -89,17 +103,19 @@ help:
 	@echo "🎵 SLSKD MP3 Search & Download Tool - Docker Commands"
 	@echo ""
 	@echo "Available commands:"
-	@echo "  build     - Build the Docker image"
-	@echo "  run       - Run the container interactively"
-	@echo "  up        - Start with docker-compose"
-	@echo "  down      - Stop docker-compose services"
-	@echo "  logs      - View container logs"
-	@echo "  search    - Search for a song"
-	@echo "  playlist  - Download Spotify playlist"
-	@echo "  history   - Show download history"
-	@echo "  shell     - Open interactive shell"
-	@echo "  clean     - Clean up Docker resources"
-	@echo "  remove    - Remove Docker image"
-	@echo "  help      - Show this help message"
+	@echo "  build              - Build the Docker image"
+	@echo "  run                - Run the container interactively"
+	@echo "  telegram-bot       - Start Telegram bot (Docker)"
+	@echo "  telegram-bot-local - Start Telegram bot (local)"
+	@echo "  up                 - Start with docker-compose"
+	@echo "  down               - Stop docker-compose services"
+	@echo "  logs               - View container logs"
+	@echo "  search             - Search for a song"
+	@echo "  playlist           - Download Spotify playlist"
+	@echo "  history            - Show download history"
+	@echo "  shell              - Open interactive shell"
+	@echo "  clean              - Clean up Docker resources"
+	@echo "  remove             - Remove Docker image"
+	@echo "  help               - Show this help message"
 
-.PHONY: build run up down logs search playlist history shell clean remove help
+.PHONY: build run telegram-bot telegram-bot-local up down logs search playlist history shell clean remove help

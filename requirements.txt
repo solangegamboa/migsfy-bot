@@ -6,5 +6,8 @@ spotipy>=2.22.0
 # Optional dependencies for enhanced functionality
 music-tag>=0.4.3
 
+# Telegram Bot integration
+python-telegram-bot>=20.0
+
 # System dependencies (handled by Dockerfile)
 # gcc and g++ are installed via apt-get in Dockerfile

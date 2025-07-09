@@ -18,11 +18,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY slskd-mp3-search.py .
+COPY telegram_bot.py .
 COPY docker-entrypoint.sh .
+COPY run-telegram-bot.sh .
 COPY .env.example .
 
-# Make entrypoint script executable
-RUN chmod +x docker-entrypoint.sh
+# Make scripts executable
+RUN chmod +x docker-entrypoint.sh run-telegram-bot.sh
 
 # Create directories for data persistence
 RUN mkdir -p /app/data /app/cache

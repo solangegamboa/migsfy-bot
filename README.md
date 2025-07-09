@@ -14,6 +14,7 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
 - **🆕 Gerenciamento de histórico**: Comandos para visualizar, limpar e forçar downloads
 - **🎵 Integração Spotify**: Baixa playlists completas do Spotify automaticamente
 - **🗑️ Remoção automática**: Remove músicas da playlist após encontrá-las para download
+- **🤖 Bot do Telegram**: Controle remoto via Telegram para busca e download
 
 ## 📋 Pré-requisitos
 
@@ -161,6 +162,23 @@ spotify:playlist:37i9dQZF1DXcBWIGoYBM5M
 python3 slskd-mp3-search.py
 ```
 
+### 🤖 Bot do Telegram:
+```bash
+# Executar bot localmente
+./run-telegram-bot.sh
+
+# Com Docker
+make telegram-bot
+
+# Comandos do bot:
+# /start - Iniciar bot
+# /search <termo> - Buscar música
+# /spotify <url> - Baixar playlist
+# /history - Ver histórico
+# Exemplo: /search Artista - Música
+# Exemplo: /spotify https://open.spotify.com/playlist/ID
+```
+
 ## ⚙️ Configurações
 
 ### Variáveis de ambiente (.env):
@@ -173,6 +191,8 @@ python3 slskd-mp3-search.py
 | `SPOTIFY_CLIENT_ID` | Client ID do Spotify | - |
 | `SPOTIFY_CLIENT_SECRET` | Client Secret do Spotify | - |
 | `SPOTIFY_REDIRECT_URI` | URI de redirecionamento | http://localhost:8888/callback |
+| `TELEGRAM_BOT_TOKEN` | Token do bot do Telegram | - |
+| `TELEGRAM_ALLOWED_USERS` | IDs dos usuários autorizados | - |
 | `MAX_SEARCH_VARIATIONS` | Máximo de variações de busca | 8 |
 | `MIN_MP3_SCORE` | Score mínimo para MP3 | 15 |
 | `SEARCH_WAIT_TIME` | Tempo limite de busca (s) | 25 |

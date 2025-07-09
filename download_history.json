@@ -25,5 +25,50 @@
     "file_size": 6947570,
     "date": "2025-07-08T20:50:41.905619",
     "hash": "163a35e6b59c"
+  },
+  "5711d9dc0732": {
+    "original_search": "Los Hermanos - O vento",
+    "normalized_search": "los hermanos o vento",
+    "filename": "@@jyemb\\Música\\Los Hermanos\\2005 - 4\\07 - O Vento.mp3",
+    "username": "NagarMancair",
+    "file_size": 6965616,
+    "date": "2025-07-08T21:42:54.977037",
+    "hash": "5711d9dc0732"
+  },
+  "ebc67cf796a4": {
+    "original_search": "alt-J - Tessellate",
+    "normalized_search": "altj tessellate",
+    "filename": "@@bxokz\\m\\alt-J\\[2011] ∆\\04. Tessellate.mp3",
+    "username": "ccec",
+    "file_size": 4800375,
+    "date": "2025-07-08T21:43:29.075621",
+    "hash": "ebc67cf796a4"
+  },
+  "38bef363efe3": {
+    "original_search": "alt-J - Every Other Freckle",
+    "normalized_search": "altj every other freckle",
+    "filename": "downloads\\Alt-J\\04 Every Other Freckle.mp3",
+    "username": "GummyFishOwO",
+    "file_size": 8644429,
+    "date": "2025-07-08T21:43:40.925590",
+    "hash": "38bef363efe3"
+  },
+  "9733d9625123": {
+    "original_search": "alt-J - Hunger Of The Pine",
+    "normalized_search": "altj hunger of the pine",
+    "filename": "downloads\\Alt-J\\08 Hunger Of The Pine.mp3",
+    "username": "GummyFishOwO",
+    "file_size": 11992282,
+    "date": "2025-07-08T21:43:52.417450",
+    "hash": "9733d9625123"
+  },
+  "bfbf1c412b2e": {
+    "original_search": "Alanis Morissette - Ironic - 2015 Remaster",
+    "normalized_search": "alanis morissette ironic 2015 remaster",
+    "filename": "music\\Calvin Harris\\18 Months\\07 - Iron (feat Nicky Romero).mp3",
+    "username": "Strongbad536",
+    "file_size": 8962789,
+    "date": "2025-07-08T21:45:26.682985",
+    "hash": "bfbf1c412b2e"
   }
 }

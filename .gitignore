@@ -52,3 +52,7 @@ cache/
 # docker-compose.yml
 # .dockerignore
 # requirements.txt
+
+# Documentation files that should be committed
+# README*.md
+# telegram-commands-examples.md

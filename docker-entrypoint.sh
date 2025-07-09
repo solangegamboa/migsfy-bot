@@ -18,6 +18,9 @@ show_usage() {
     echo "  # Show history"
     echo "  docker run migsfy-bot --history"
     echo ""
+    echo "  # Start Telegram bot"
+    echo "  docker run migsfy-bot --telegram-bot"
+    echo ""
     echo "  # Interactive mode"
     echo "  docker run -it migsfy-bot bash"
     echo ""
@@ -33,6 +36,12 @@ fi
 
 # Create necessary directories
 mkdir -p /app/data /app/cache
+
+# Check for Telegram bot command
+if [ "$1" = "--telegram-bot" ] || [ "$1" = "--bot" ]; then
+    echo "🤖 Starting Telegram Bot..."
+    exec python telegram_bot.py
+fi
 
 # If no arguments provided, show usage
 if [ $# -eq 0 ]; then
