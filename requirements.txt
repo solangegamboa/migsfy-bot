@@ -1,2 +1,10 @@
-music-tag==0.4.3
-slskd-api==0.1.5
+# Core dependencies
+slskd-api>=1.0.0
+python-dotenv>=1.0.0
+spotipy>=2.22.0
+
+# Optional dependencies for enhanced functionality
+music-tag>=0.4.3
+
+# System dependencies (handled by Dockerfile)
+# gcc and g++ are installed via apt-get in Dockerfile

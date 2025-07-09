@@ -24,6 +24,8 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
 
 ## 🔧 Instalação
 
+### Instalação Local
+
 1. **Clone o repositório**:
    ```bash
    git clone <repository-url>
@@ -40,6 +42,32 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
    cp .env.example .env
    # Edite o arquivo .env com suas configurações
    ```
+
+### 🐳 Instalação com Docker
+
+1. **Clone e configure**:
+   ```bash
+   git clone <repository-url>
+   cd migsfy-bot
+   cp .env.example .env
+   # Edite o .env com suas configurações
+   ```
+
+2. **Build e execute**:
+   ```bash
+   # Build da imagem
+   make build
+   
+   # Execução interativa
+   make run
+   
+   # Ou comandos específicos
+   make search    # Buscar música
+   make playlist  # Download de playlist
+   make history   # Ver histórico
+   ```
+
+3. **Veja o [README-Docker.md](README-Docker.md) para instruções detalhadas**
 
 4. **Configure o arquivo .env**:
    ```env

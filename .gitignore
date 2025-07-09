@@ -38,3 +38,17 @@ Thumbs.db
 
 # Backup files
 *.backup
+
+# Docker
+.spotify_cache
+download_history.json
+
+# Data directories (Docker volumes)
+data/
+cache/
+
+# Docker-specific files that should be committed
+# Dockerfile
+# docker-compose.yml
+# .dockerignore
+# requirements.txt

@@ -1,0 +1,46 @@
+# docker-compose.override.yml.example
+# Copie para docker-compose.override.yml e customize conforme necessário
+
+version: '3.8'
+
+services:
+  migsfy-bot:
+    # Descomente para modo interativo
+    # stdin_open: true
+    # tty: true
+    
+    # Variáveis de ambiente adicionais
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+    
+    # Portas adicionais (se necessário)
+    # ports:
+    #   - "8888:8888"  # Para autenticação Spotify
+    
+    # Comando personalizado
+    # command: ["--history"]
+
+  # Exemplo de serviço SLSKD integrado
+  slskd:
+    image: slskd/slskd:latest
+    container_name: slskd
+    restart: unless-stopped
+    ports:
+      - "5030:5030"
+      - "50300:50300"
+    volumes:
+      - ./slskd-config:/app/config
+      - ./slskd-downloads:/app/downloads
+      - ./slskd-shared:/app/shared
+    environment:
+      - SLSKD_SHARED_DIR=/app/shared
+      - SLSKD_DOWNLOADS_DIR=/app/downloads
+    networks:
+      - migsfy-network
+
+# Volumes nomeados para persistência
+volumes:
+  slskd-config:
+  slskd-downloads:
+  slskd-shared:

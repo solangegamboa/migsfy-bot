@@ -59,7 +59,11 @@ def connectToSlskd():
 
 def get_download_history_file():
     """Retorna o caminho do arquivo de histórico"""
-    return os.path.join(os.path.dirname(__file__), 'download_history.json')
+    # Verifica se está rodando em Docker (variável de ambiente ou diretório /app/data)
+    if os.path.exists('/app/data'):
+        return '/app/data/download_history.json'
+    else:
+        return os.path.join(os.path.dirname(__file__), 'download_history.json')
 
 
 def load_download_history():
