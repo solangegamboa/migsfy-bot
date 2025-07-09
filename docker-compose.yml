@@ -15,9 +15,10 @@ services:
       - PUID=${PUID:-0}
       - PGID=${PGID:-0}
 
-    # Volumes for data persistence
+    # Volumes for data persistence - mount only data directories
     volumes:
-      - /DATA/AppData/migsfy:/app
+      - /DATA/AppData/migsfy:/app/data
+      - ./.env:/app/.env:ro
 
     # Network configuration
     networks:
@@ -45,9 +46,10 @@ services:
       - PUID=${PUID:-0}
       - PGID=${PGID:-0}
 
-    # Volumes for data persistence
+    # Volumes for data persistence - mount only data directories
     volumes:
-      - /DATA/AppData/migsfy:/app
+      - /DATA/AppData/migsfy:/app/data
+      - ./.env:/app/.env:ro
 
     # Network configuration
     networks:
