@@ -33,9 +33,7 @@ RUN mkdir -p /app/data /app/cache
 ENV PYTHONUNBUFFERED=1
 ENV SPOTIFY_CACHE_PATH=/app/cache/.spotify_cache
 
-# Create non-root user for security
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+USER root
 
 # Set entrypoint
 ENTRYPOINT ["./docker-entrypoint.sh"]
