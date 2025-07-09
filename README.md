@@ -54,21 +54,37 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
    # Edite o .env com suas configurações
    ```
 
-2. **Build e execute**:
+2. **Configure PUID e PGID (recomendado)**:
+   ```bash
+   # Descobrir seus IDs
+   id -u  # PUID
+   id -g  # PGID
+   
+   # Adicionar ao .env
+   echo "PUID=$(id -u)" >> .env
+   echo "PGID=$(id -g)" >> .env
+   ```
+
+3. **Build e execute**:
    ```bash
    # Build da imagem
    make build
    
-   # Execução interativa
+   # Execução interativa (com permissões corretas)
    make run
    
    # Ou comandos específicos
    make search    # Buscar música
    make playlist  # Download de playlist
    make history   # Ver histórico
+   
+   # Com docker-compose
+   make up        # Background
+   make up-fg     # Foreground
    ```
 
-3. **Veja o [README-Docker.md](README-Docker.md) para instruções detalhadas**
+4. **Veja o [README-Docker.md](README-Docker.md) para instruções detalhadas**
+5. **Veja o [DOCKER-PERMISSIONS.md](DOCKER-PERMISSIONS.md) para configuração de permissões**
 
 4. **Configure o arquivo .env**:
    ```env

@@ -32,6 +32,8 @@ RUN mkdir -p /app/data /app/cache
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV SPOTIFY_CACHE_PATH=/app/cache/.spotify_cache
+ENV PUID=0
+ENV PGID=0
 
 USER root
 

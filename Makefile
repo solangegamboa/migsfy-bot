@@ -5,24 +5,43 @@ IMAGE_NAME = migsfy-bot
 CONTAINER_NAME = migsfy-bot
 VERSION = latest
 
+# Get current user IDs
+PUID := $(shell id -u)
+PGID := $(shell id -g)
+
 # Build the Docker image
 build:
 	@echo "🔨 Building Docker image..."
 	docker build -t $(IMAGE_NAME):$(VERSION) .
 
+# Build with no cache
+build-no-cache:
+	@echo "🔨 Building Docker image (no cache)..."
+	docker build --no-cache -t $(IMAGE_NAME):$(VERSION) .
+
 # Run the container interactively
 run:
 	@echo "🚀 Running container..."
 	docker run --rm -it \
+		-e PUID=$(PUID) \
+		-e PGID=$(PGID) \
 		-v $(PWD)/.env:/app/.env:ro \
 		-v $(PWD)/data:/app/data \
 		-v $(PWD)/cache:/app/cache \
 		$(IMAGE_NAME):$(VERSION)
 
+# Show current user IDs
+show-ids:
+	@echo "Current User IDs:"
+	@echo "PUID=$(PUID)"
+	@echo "PGID=$(PGID)"
+
 # Run Telegram bot
 telegram-bot:
 	@echo "🤖 Starting Telegram bot..."
 	docker run --rm -it \
+		-e PUID=$(PUID) \
+		-e PGID=$(PGID) \
 		-v $(PWD)/.env:/app/.env:ro \
 		-v $(PWD)/data:/app/data \
 		-v $(PWD)/cache:/app/cache \
@@ -36,7 +55,12 @@ telegram-bot-local:
 # Run with docker-compose
 up:
 	@echo "🚀 Starting with docker-compose..."
-	docker-compose up -d
+	PUID=$(PUID) PGID=$(PGID) docker-compose up -d
+
+# Run with docker-compose (foreground)
+up-fg:
+	@echo "🚀 Starting with docker-compose (foreground)..."
+	PUID=$(PUID) PGID=$(PGID) docker-compose up
 
 # Stop docker-compose services
 down:
@@ -81,6 +105,8 @@ history:
 shell:
 	@echo "🐚 Opening interactive shell..."
 	docker run --rm -it \
+		-e PUID=$(PUID) \
+		-e PGID=$(PGID) \
 		-v $(PWD)/.env:/app/.env:ro \
 		-v $(PWD)/data:/app/data \
 		-v $(PWD)/cache:/app/cache \
@@ -104,10 +130,13 @@ help:
 	@echo ""
 	@echo "Available commands:"
 	@echo "  build              - Build the Docker image"
+	@echo "  build-no-cache     - Build the Docker image (no cache)"
 	@echo "  run                - Run the container interactively"
+	@echo "  show-ids           - Show current PUID and PGID"
 	@echo "  telegram-bot       - Start Telegram bot (Docker)"
 	@echo "  telegram-bot-local - Start Telegram bot (local)"
-	@echo "  up                 - Start with docker-compose"
+	@echo "  up                 - Start with docker-compose (background)"
+	@echo "  up-fg              - Start with docker-compose (foreground)"
 	@echo "  down               - Stop docker-compose services"
 	@echo "  logs               - View container logs"
 	@echo "  search             - Search for a song"
@@ -117,5 +146,9 @@ help:
 	@echo "  clean              - Clean up Docker resources"
 	@echo "  remove             - Remove Docker image"
 	@echo "  help               - Show this help message"
+	@echo ""
+	@echo "🔐 Permission Management:"
+	@echo "  All Docker commands automatically use your current PUID=$(PUID) and PGID=$(PGID)"
+	@echo "  Files created by containers will have the correct permissions"
 
-.PHONY: build run telegram-bot telegram-bot-local up down logs search playlist history shell clean remove help
+.PHONY: build build-no-cache run show-ids telegram-bot telegram-bot-local up up-fg down logs search playlist history shell clean remove help

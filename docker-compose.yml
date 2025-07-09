@@ -10,6 +10,11 @@ services:
     env_file:
       - .env
 
+    # Additional environment variables for user permissions
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+
     # Volumes for data persistence
     volumes:
       - /DATA/AppData/migsfy:/app
@@ -34,6 +39,11 @@ services:
     # Environment variables from .env file
     env_file:
       - .env
+
+    # Additional environment variables for user permissions
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
 
     # Volumes for data persistence
     volumes:
