@@ -421,7 +421,7 @@ def get_playlist_tracks_with_uris(sp, playlist_id):
         return [], ""
 
 
-def download_playlist_tracks(slskd, tracks, playlist_name, max_tracks=None, skip_duplicates=True):
+def download_playlist_tracks(slskd, tracks, playlist_name, max_tracks=None, skip_duplicates=True, auto_cleanup=True):
     """Baixa todas as faixas de uma playlist"""
     if not tracks:
         print("❌ Nenhuma faixa para baixar")
@@ -481,7 +481,16 @@ def download_playlist_tracks(slskd, tracks, playlist_name, max_tracks=None, skip
     
     if successful_downloads > 0:
         print(f"\n💡 {successful_downloads} downloads foram iniciados!")
-        print(f"💡 Monitore o progresso no slskd web interface")
+        
+        if auto_cleanup:
+            print(f"🧹 Iniciando limpeza automática de downloads completados...")
+            # Aguarda um pouco para os downloads começarem
+            time.sleep(5)
+            # Monitora e limpa downloads por 10 minutos
+            monitor_and_cleanup_downloads(slskd, max_wait=600, check_interval=15)
+        else:
+            print(f"💡 Monitore o progresso no slskd web interface")
+            print(f"💡 Use manual_cleanup_downloads() para limpar downloads completados")
 
 
 def show_playlist_preview(tracks, limit=10):
@@ -504,7 +513,7 @@ def show_playlist_preview(tracks, limit=10):
         print(f"     ... e mais {len(tracks) - limit} faixas")
 
 
-def download_playlist_tracks_with_removal(slskd, sp_user, playlist_id, tracks, playlist_name, max_tracks=None, skip_duplicates=True):
+def download_playlist_tracks_with_removal(slskd, sp_user, playlist_id, tracks, playlist_name, max_tracks=None, skip_duplicates=True, auto_cleanup=True):
     """Baixa faixas de uma playlist e remove as encontradas da playlist do Spotify"""
     if not tracks:
         print("❌ Nenhuma faixa para baixar")
@@ -582,7 +591,16 @@ def download_playlist_tracks_with_removal(slskd, sp_user, playlist_id, tracks, p
     
     if successful_downloads > 0:
         print(f"\n💡 {successful_downloads} downloads foram iniciados!")
-        print(f"💡 Monitore o progresso no slskd web interface")
+        
+        if auto_cleanup:
+            print(f"🧹 Iniciando limpeza automática de downloads completados...")
+            # Aguarda um pouco para os downloads começarem
+            time.sleep(5)
+            # Monitora e limpa downloads por 10 minutos
+            monitor_and_cleanup_downloads(slskd, max_wait=600, check_interval=15)
+        else:
+            print(f"💡 Monitore o progresso no slskd web interface")
+            print(f"💡 Use manual_cleanup_downloads() para limpar downloads completados")
     
     if removed_from_playlist > 0:
         print(f"🎵 {removed_from_playlist} faixas foram removidas da playlist do Spotify")
@@ -1235,6 +1253,104 @@ def smart_mp3_search_force(slskd, query):
     return False
 
 
+def auto_cleanup_completed_downloads(slskd, silent=False):
+    """Remove automaticamente downloads completados da fila"""
+    try:
+        downloads = slskd.transfers.get_all_downloads()
+        if not downloads:
+            return 0
+        
+        completed_downloads = []
+        for download in downloads:
+            state = download.get('state', '').lower()
+            if state in ['completed', 'complete', 'finished']:
+                completed_downloads.append({
+                    'filename': os.path.basename(download.get('filename', '')),
+                    'username': download.get('username', ''),
+                    'state': state
+                })
+        
+        if completed_downloads:
+            if not silent:
+                print(f"🧹 Removendo {len(completed_downloads)} downloads completados da fila...")
+                for download in completed_downloads:
+                    print(f"   ✅ {download['filename']} (de {download['username']})")
+            
+            # Remove downloads completados
+            try:
+                slskd.transfers.remove_completed_downloads()
+                if not silent:
+                    print(f"🎉 {len(completed_downloads)} downloads removidos da fila!")
+                return len(completed_downloads)
+            except Exception as e:
+                if not silent:
+                    print(f"⚠️ Erro ao remover downloads: {e}")
+                return 0
+        else:
+            if not silent:
+                print("ℹ️ Nenhum download completado para remover")
+            return 0
+            
+    except Exception as e:
+        if not silent:
+            print(f"❌ Erro na limpeza automática: {e}")
+        return 0
+
+
+def monitor_and_cleanup_downloads(slskd, search_term=None, max_wait=300, check_interval=10):
+    """Monitora downloads e remove automaticamente os completados"""
+    try:
+        print(f"👀 Monitorando downloads por até {max_wait//60} minutos...")
+        print(f"🧹 Limpeza automática a cada {check_interval} segundos")
+        
+        start_time = time.time()
+        last_cleanup_time = start_time
+        
+        while time.time() - start_time < max_wait:
+            # Verifica se é hora de fazer limpeza
+            current_time = time.time()
+            if current_time - last_cleanup_time >= check_interval:
+                removed_count = auto_cleanup_completed_downloads(slskd, silent=True)
+                if removed_count > 0:
+                    print(f"🧹 {removed_count} downloads completados removidos da fila")
+                last_cleanup_time = current_time
+            
+            # Verifica se ainda há downloads ativos
+            downloads = slskd.transfers.get_all_downloads()
+            if not downloads:
+                print("✅ Todos os downloads foram processados!")
+                break
+            
+            # Mostra status dos downloads ativos
+            active_count = 0
+            completed_count = 0
+            for download in downloads:
+                state = download.get('state', '').lower()
+                if state in ['completed', 'complete', 'finished']:
+                    completed_count += 1
+                else:
+                    active_count += 1
+            
+            if active_count > 0:
+                print(f"⏳ {active_count} downloads ativos, {completed_count} completados")
+            
+            time.sleep(check_interval)
+        
+        # Limpeza final
+        final_cleanup = auto_cleanup_completed_downloads(slskd)
+        if final_cleanup > 0:
+            print(f"🧹 Limpeza final: {final_cleanup} downloads removidos")
+        
+        print("✅ Monitoramento concluído!")
+        
+    except KeyboardInterrupt:
+        print("\n⚠️ Monitoramento interrompido pelo usuário")
+        # Faz limpeza final mesmo se interrompido
+        auto_cleanup_completed_downloads(slskd)
+    except Exception as e:
+        print(f"❌ Erro no monitoramento: {e}")
+
+
 def manual_cleanup_downloads(slskd):
     """Função para limpeza manual imediata dos downloads completados"""
     try:
@@ -1337,7 +1453,11 @@ def main():
     print("   --playlist URL --no-skip : Baixa mesmo duplicatas")
     print("   --playlist URL --auto    : Baixa sem confirmação")
     print("   --playlist URL --remove-from-playlist : Remove da playlist após download")
+    print("   --playlist URL --no-auto-cleanup : Desabilita limpeza automática de downloads")
     print("   --playlist URL --auto --limit N --no-skip --remove-from-playlist : Combina opções")
+    print("🧹 Limpeza de downloads:")
+    print("   --cleanup          : Remove downloads completados da fila")
+    print("   --monitor          : Monitora e limpa downloads automaticamente")
     print()
     
     # Verifica comandos especiais
@@ -1352,6 +1472,21 @@ def main():
         # Comando para limpar histórico
         elif first_arg == '--clear-history':
             clear_download_history()
+            return
+        
+        # Comando para limpeza manual de downloads
+        elif first_arg == '--cleanup':
+            slskd = connectToSlskd()
+            if slskd:
+                manual_cleanup_downloads(slskd)
+            return
+        
+        # Comando para monitoramento de downloads
+        elif first_arg == '--monitor':
+            slskd = connectToSlskd()
+            if slskd:
+                print("🎯 Iniciando monitoramento de downloads...")
+                monitor_and_cleanup_downloads(slskd, max_wait=1800, check_interval=30)  # 30 min
             return
         
         # Comando para remover entrada específica
@@ -1442,6 +1577,9 @@ def main():
             # Mostra preview antes de baixar
             show_playlist_preview(tracks, limit=10)
             
+            # Verifica se deve desabilitar limpeza automática
+            auto_cleanup = '--no-auto-cleanup' not in sys.argv
+            
             # Confirmação do usuário (se não for automático)
             if not auto_confirm:
                 print(f"\n🤔 Deseja baixar {len(tracks)} faixas da playlist '{playlist_name}'?")
@@ -1451,6 +1589,10 @@ def main():
                     print(f"   (incluindo duplicatas)")
                 if remove_from_playlist:
                     print(f"   🗑️ (faixas encontradas serão removidas da playlist)")
+                if auto_cleanup:
+                    print(f"   🧹 (limpeza automática de downloads habilitada)")
+                else:
+                    print(f"   🧹 (limpeza automática desabilitada)")
                 
                 confirm = input("Digite 'sim' para continuar: ").lower().strip()
                 if confirm not in ['sim', 's', 'yes', 'y']:
@@ -1464,12 +1606,16 @@ def main():
                     print(f"   (incluindo duplicatas)")
                 if remove_from_playlist:
                     print(f"   🗑️ (faixas encontradas serão removidas da playlist)")
+                if auto_cleanup:
+                    print(f"   🧹 (limpeza automática de downloads habilitada)")
+                else:
+                    print(f"   🧹 (limpeza automática desabilitada)")
             
             # Inicia downloads (com ou sem remoção da playlist)
             if remove_from_playlist:
-                download_playlist_tracks_with_removal(slskd, sp_user, playlist_id, tracks, playlist_name, max_tracks, skip_duplicates)
+                download_playlist_tracks_with_removal(slskd, sp_user, playlist_id, tracks, playlist_name, max_tracks, skip_duplicates, auto_cleanup)
             else:
-                download_playlist_tracks(slskd, tracks, playlist_name, max_tracks, skip_duplicates)
+                download_playlist_tracks(slskd, tracks, playlist_name, max_tracks, skip_duplicates, auto_cleanup)
             return
         
         # Comando para forçar download
@@ -1481,13 +1627,22 @@ def main():
             if not slskd:
                 return
             
+            # Verifica se deve desabilitar limpeza automática
+            auto_cleanup = '--no-auto-cleanup' not in sys.argv
+            
             # Busca sem verificar histórico
             success = smart_mp3_search_force(slskd, custom_query)
             
             if success:
                 show_downloads(slskd)
                 print(f"\n✅ Busca forçada concluída com sucesso!")
-                print(f"💡 Para limpar downloads completados manualmente, use manual_cleanup_downloads()")
+                
+                if auto_cleanup:
+                    print(f"🧹 Iniciando limpeza automática de downloads completados...")
+                    time.sleep(5)  # Aguarda download começar
+                    monitor_and_cleanup_downloads(slskd, max_wait=300, check_interval=10)  # 5 min
+                else:
+                    print(f"💡 Para limpar downloads completados manualmente, use --cleanup")
             else:
                 print(f"\n❌ Nenhum MP3 adequado encontrado")
             return
@@ -1497,8 +1652,11 @@ def main():
         return
     
     if len(sys.argv) > 1:
+        # Verifica se deve desabilitar limpeza automática
+        auto_cleanup = '--no-auto-cleanup' not in sys.argv
+        
         # Busca personalizada
-        custom_query = ' '.join(sys.argv[1:])
+        custom_query = ' '.join([arg for arg in sys.argv[1:] if arg != '--no-auto-cleanup'])
         print(f"🎯 Iniciando busca por: '{custom_query}'")
         
         success = smart_mp3_search(slskd, custom_query)
@@ -1506,7 +1664,13 @@ def main():
         if success:
             show_downloads(slskd)
             print(f"\n✅ Busca concluída com sucesso!")
-            print(f"💡 Para limpar downloads completados manualmente, use manual_cleanup_downloads()")
+            
+            if auto_cleanup:
+                print(f"🧹 Iniciando limpeza automática de downloads completados...")
+                time.sleep(5)  # Aguarda download começar
+                monitor_and_cleanup_downloads(slskd, max_wait=300, check_interval=10)  # 5 min
+            else:
+                print(f"💡 Para limpar downloads completados manualmente, use --cleanup")
         else:
             print(f"\n❌ Nenhum MP3 adequado encontrado")
     else:
@@ -1514,6 +1678,7 @@ def main():
         print("💡 Nenhum parâmetro fornecido.")
         print("💡 Use um dos comandos acima ou forneça um termo de busca.")
         print("💡 Exemplo: python3 slskd-mp3-search.py \"Artista - Música\"")
+        print("💡 Para desabilitar limpeza automática: adicione --no-auto-cleanup")
 
 
 if __name__ == "__main__":

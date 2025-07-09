@@ -9,7 +9,8 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
 - **Sistema de fallback**: Tenta usuários alternativos automaticamente
 - **Filtros avançados**: Usa sintaxe correta do SoulSeek (wildcards, exclusões)
 - **Melhoria de nomes**: Renomeia arquivos usando tags de metadados
-- **Limpeza manual**: Remove downloads completados da fila
+- **🆕 Limpeza automática**: Remove downloads completados da fila automaticamente
+- **🆕 Monitoramento inteligente**: Monitora downloads e limpa automaticamente
 - **🆕 Histórico de downloads**: Evita downloads duplicados automaticamente
 - **🆕 Gerenciamento de histórico**: Comandos para visualizar, limpar e forçar downloads
 - **🎵 Integração Spotify**: Baixa playlists completas do Spotify automaticamente
@@ -113,6 +114,19 @@ python3 slskd-mp3-search.py "Artista - Música"
 python3 slskd-mp3-search.py "Linkin Park - In the End"
 python3 slskd-mp3-search.py "Maria Rita - Como Nossos Pais"
 python3 slskd-mp3-search.py "Bohemian Rhapsody"
+```
+
+### 🧹 Comandos de limpeza de downloads:
+```bash
+# Limpeza manual imediata
+python3 slskd-mp3-search.py --cleanup
+
+# Monitoramento contínuo (30 minutos)
+python3 slskd-mp3-search.py --monitor
+
+# Desabilitar limpeza automática (para qualquer comando)
+python3 slskd-mp3-search.py "Artista - Música" --no-auto-cleanup
+python3 slskd-mp3-search.py --playlist "URL" --no-auto-cleanup
 ```
 
 ### 🆕 Comandos de histórico:
@@ -245,13 +259,19 @@ Veja [README-Telegram-Groups.md](README-Telegram-Groups.md) para configuração 
    - Tenta usuários alternativos se necessário
    - Usa formato correto da API slskd
 
-4. **🆕 Sistema de histórico**:
+4. **🆕 Limpeza automática**:
+   - Remove downloads completados da fila automaticamente
+   - Monitora downloads em tempo real
+   - Evita acúmulo de downloads antigos na interface
+   - Pode ser desabilitada com `--no-auto-cleanup`
+
+5. **🆕 Sistema de histórico**:
    - Salva automaticamente downloads bem-sucedidos
    - Evita downloads duplicados por padrão
    - Permite forçar downloads quando necessário
    - Histórico armazenado em `download_history.json`
 
-5. **🎵 Integração Spotify**:
+6. **🎵 Integração Spotify**:
    - Extrai automaticamente faixas de playlists
    - Converte para formato "Artista - Música"
    - Suporte a playlists públicas e privadas (com autenticação)
@@ -260,11 +280,32 @@ Veja [README-Telegram-Groups.md](README-Telegram-Groups.md) para configuração 
 
 ## 🛠️ Funções úteis
 
+### 🧹 Limpeza automática de downloads:
+```python
+from slskd_mp3_search import auto_cleanup_completed_downloads, connectToSlskd
+slskd = connectToSlskd()
+
+# Limpeza automática silenciosa
+auto_cleanup_completed_downloads(slskd, silent=True)
+
+# Limpeza automática com feedback
+auto_cleanup_completed_downloads(slskd, silent=False)
+```
+
 ### Limpeza manual de downloads:
 ```python
 from slskd_mp3_search import manual_cleanup_downloads, connectToSlskd
 slskd = connectToSlskd()
 manual_cleanup_downloads(slskd)
+```
+
+### 🔄 Monitoramento de downloads:
+```python
+from slskd_mp3_search import monitor_and_cleanup_downloads, connectToSlskd
+slskd = connectToSlskd()
+
+# Monitora por 10 minutos, limpeza a cada 15 segundos
+monitor_and_cleanup_downloads(slskd, max_wait=600, check_interval=15)
 ```
 
 ### 🆕 Gerenciamento de histórico:
@@ -372,17 +413,32 @@ python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --no-skip --auto
 
 ### Cenário 4: Download automatizado completo
 ```bash
-# Download completo sem interação do usuário
+# Download completo sem interação do usuário (com limpeza automática)
 python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --auto
 
-# Download limitado e automatizado
+# Download limitado e automatizado (com limpeza automática)
 python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --limit 10 --auto
 
-# Download completo incluindo duplicatas, sem confirmação
+# Download completo incluindo duplicatas, sem confirmação (com limpeza automática)
 python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --no-skip --auto
 
-# Download com remoção automática da playlist
+# Download com remoção automática da playlist (com limpeza automática)
 python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --auto --remove-from-playlist
+
+# Download sem limpeza automática (para controle manual)
+python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --auto --no-auto-cleanup
+```
+
+### Cenário 5: Limpeza e monitoramento
+```bash
+# Limpeza manual imediata
+python3 slskd-mp3-search.py --cleanup
+
+# Monitoramento contínuo por 30 minutos
+python3 slskd-mp3-search.py --monitor
+
+# Download individual sem limpeza automática
+python3 slskd-mp3-search.py "Artista - Música" --no-auto-cleanup
 ```
 
 ## 📝 Licença
