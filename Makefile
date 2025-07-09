@@ -5,9 +5,9 @@ IMAGE_NAME = migsfy-bot
 CONTAINER_NAME = migsfy-bot
 VERSION = latest
 
-# Get current user IDs
-PUID := $(shell id -u)
-PGID := $(shell id -g)
+# Get current user IDs (default to root)
+PUID := 0
+PGID := 0
 
 # Build the Docker image
 build:
@@ -148,7 +148,8 @@ help:
 	@echo "  help               - Show this help message"
 	@echo ""
 	@echo "🔐 Permission Management:"
-	@echo "  All Docker commands automatically use your current PUID=$(PUID) and PGID=$(PGID)"
-	@echo "  Files created by containers will have the correct permissions"
+	@echo "  Default: PUID=0 PGID=0 (root user) for maximum compatibility"
+	@echo "  All Docker commands run as root by default"
+	@echo "  To use your user: PUID=\$(id -u) PGID=\$(id -g) make up"
 
 .PHONY: build build-no-cache run show-ids telegram-bot telegram-bot-local up up-fg down logs search playlist history shell clean remove help

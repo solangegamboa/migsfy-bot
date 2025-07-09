@@ -54,13 +54,10 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
    # Edite o .env com suas configurações
    ```
 
-2. **Configure PUID e PGID (recomendado)**:
+2. **Configure PUID e PGID (opcional)**:
    ```bash
-   # Descobrir seus IDs
-   id -u  # PUID
-   id -g  # PGID
-   
-   # Adicionar ao .env
+   # Por padrão usa root (PUID=0, PGID=0) para máxima compatibilidade
+   # Para usar seu usuário local (opcional):
    echo "PUID=$(id -u)" >> .env
    echo "PGID=$(id -g)" >> .env
    ```

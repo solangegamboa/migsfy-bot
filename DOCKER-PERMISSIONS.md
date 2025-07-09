@@ -2,163 +2,161 @@
 
 ## 🔐 O que são PUID e PGID?
 
-PUID (Process User ID) e PGID (Process Group ID) são variáveis que permitem que o container Docker execute com as mesmas permissões do seu usuário local, evitando problemas de permissão com arquivos criados pelo container.
+PUID (Process User ID) e PGID (Process Group ID) são variáveis que controlam com quais permissões o container Docker executa. Por padrão, este projeto usa **root (PUID=0, PGID=0)** para simplicidade e compatibilidade.
 
-## 🎯 Por que usar?
+## 🎯 Configuração Padrão (Root)
 
-Sem PUID/PGID:
-- Arquivos criados pelo container pertencem ao usuário `root`
-- Você pode não conseguir editar/deletar esses arquivos
-- Problemas de permissão ao acessar volumes montados
+**Padrão atual: PUID=0, PGID=0 (usuário root)**
 
-Com PUID/PGID:
-- Arquivos criados têm as mesmas permissões do seu usuário
-- Sem problemas de permissão
-- Melhor integração com o sistema host
+Vantagens do root:
+- ✅ Sem problemas de permissão
+- ✅ Funciona em qualquer ambiente
+- ✅ Configuração mais simples
+- ✅ Compatível com todos os sistemas de arquivos
 
-## 🔧 Como descobrir seus IDs
+## 🔧 Como usar
 
-### No Linux/macOS:
+### 1. Uso padrão (recomendado):
 ```bash
-# Descobrir seu PUID
-id -u
-
-# Descobrir seu PGID  
-id -g
-
-# Ver ambos
-id
+# Usar como root (padrão)
+docker-compose up
 ```
 
-### Exemplo de saída:
+### 2. Usar com usuário específico (opcional):
 ```bash
-$ id
-uid=1000(usuario) gid=1000(usuario) groups=1000(usuario),4(adm),24(cdrom)...
+# Usar seu usuário local
+PUID=$(id -u) PGID=$(id -g) docker-compose up
+
+# Ou definir no .env
+echo "PUID=$(id -u)" >> .env
+echo "PGID=$(id -g)" >> .env
 ```
-Neste caso: PUID=1000, PGID=1000
 
-## ⚙️ Configuração
+## ⚙️ Configuração no .env
 
-### 1. No arquivo .env:
+### Padrão (root):
 ```env
-# Docker User Configuration
+# Docker User Configuration (padrão)
+PUID=0
+PGID=0
+```
+
+### Usuário personalizado:
+```env
+# Docker User Configuration (seu usuário)
 PUID=1000
 PGID=1000
 ```
 
-### 2. Ou via variáveis de ambiente:
-```bash
-export PUID=$(id -u)
-export PGID=$(id -g)
-docker-compose up
-```
-
-### 3. Ou diretamente no docker-compose:
-```bash
-PUID=$(id -u) PGID=$(id -g) docker-compose up
-```
-
 ## 🚀 Exemplos de Uso
 
-### Uso básico:
+### Uso básico (root):
 ```bash
-# Definir variáveis
-export PUID=1000
-export PGID=1000
-
-# Executar
+# Executar como root (mais simples)
 docker-compose up
-```
-
-### Uso com IDs automáticos:
-```bash
-# Usar seus IDs atuais automaticamente
-PUID=$(id -u) PGID=$(id -g) docker-compose up
+make up
 ```
 
 ### Uso com usuário específico:
 ```bash
-# Usar IDs de outro usuário
-PUID=1001 PGID=1001 docker-compose up
+# Descobrir seus IDs
+id -u  # PUID
+id -g  # PGID
+
+# Executar com seus IDs
+PUID=1000 PGID=1000 docker-compose up
 ```
 
 ## 🔍 Verificação
 
-Para verificar se está funcionando:
+Para verificar como está executando:
 
-1. **Execute o container:**
-   ```bash
-   docker-compose up -d
-   ```
-
-2. **Crie um arquivo de teste:**
-   ```bash
-   docker exec migsfy-bot touch /app/data/teste.txt
-   ```
-
-3. **Verifique as permissões:**
-   ```bash
-   ls -la data/teste.txt
-   ```
-
-4. **Deve mostrar seu usuário como proprietário:**
-   ```bash
-   -rw-r--r-- 1 seuusuario seugrupo 0 Jan 1 12:00 data/teste.txt
-   ```
-
-## 🛠️ Troubleshooting
-
-### Problema: Arquivos ainda são criados como root
-**Solução:** Verifique se as variáveis estão sendo passadas corretamente:
 ```bash
+# Ver variáveis no container
 docker exec migsfy-bot env | grep -E "PUID|PGID"
+
+# Ver usuário atual no container
+docker exec migsfy-bot whoami
+
+# Ver permissões dos arquivos
+docker exec migsfy-bot ls -la /app/data/
 ```
 
-### Problema: Container não inicia
-**Solução:** Verifique se os IDs existem no sistema:
-```bash
-getent passwd 1000
-getent group 1000
-```
+## 🛠️ Quando usar cada opção
 
-### Problema: Permissões negadas
-**Solução:** Reconstrua o container:
-```bash
-docker-compose down
-docker-compose build --no-cache
-docker-compose up
-```
+### Use Root (PUID=0, PGID=0) quando:
+- ✅ Quer simplicidade máxima
+- ✅ Não se importa com permissões de arquivos
+- ✅ Está em ambiente controlado/isolado
+- ✅ Tem problemas de permissão com outros usuários
+
+### Use usuário específico quando:
+- ✅ Quer arquivos com suas permissões
+- ✅ Está em ambiente compartilhado
+- ✅ Precisa editar arquivos criados pelo container
+- ✅ Segue práticas de segurança mais rigorosas
 
 ## 📝 Valores Padrão
 
-Se não especificado:
-- PUID padrão: 1000
-- PGID padrão: 1000
+**Novos padrões:**
+- PUID padrão: **0** (root)
+- PGID padrão: **0** (root)
 
-Estes são os valores mais comuns para o primeiro usuário em sistemas Linux.
+**Valores anteriores:**
+- PUID anterior: 1000
+- PGID anterior: 1000
 
-## ⚠️ Notas Importantes
+## ⚠️ Notas de Segurança
 
-1. **Root (PUID=0):** O container executará como root se PUID=0
-2. **Reconstrução:** Mudanças em PUID/PGID podem exigir rebuild do container
-3. **Volumes:** Certifique-se de que os diretórios montados têm as permissões corretas
-4. **Backup:** Faça backup dos dados antes de alterar permissões
+### Root (padrão):
+- ⚠️ Container executa com privilégios de root
+- ✅ Mais simples de configurar
+- ✅ Sem problemas de permissão
+- ⚠️ Menos seguro em teoria, mas isolado no container
 
-## 🔗 Integração com Makefile
+### Usuário específico:
+- ✅ Mais seguro (princípio do menor privilégio)
+- ⚠️ Pode ter problemas de permissão
+- ⚠️ Configuração mais complexa
 
-Você pode adicionar ao Makefile:
+## 🔗 Comandos Úteis
 
-```makefile
-# Obter IDs automaticamente
-get-ids:
-	@echo "PUID=$(shell id -u)"
-	@echo "PGID=$(shell id -g)"
+```bash
+# Ver IDs atuais do sistema
+make show-ids
 
-# Executar com IDs corretos
-run-with-permissions:
-	PUID=$(shell id -u) PGID=$(shell id -g) docker-compose up
+# Executar com root (padrão)
+make up
 
-# Build com permissões
-build-with-permissions:
-	PUID=$(shell id -u) PGID=$(shell id -g) docker-compose build
+# Executar com usuário específico
+PUID=$(id -u) PGID=$(id -g) make up
+
+# Build sem cache
+make build-no-cache
+
+# Shell interativo
+make shell
+```
+
+## 🐛 Troubleshooting
+
+### Problema: Arquivos com permissões erradas
+**Solução:** Use root (padrão) ou ajuste PUID/PGID:
+```bash
+# Voltar para root
+export PUID=0 PGID=0
+docker-compose up
+
+# Ou usar seu usuário
+export PUID=$(id -u) PGID=$(id -g)
+docker-compose up
+```
+
+### Problema: Container não inicia
+**Solução:** Reconstrua com root:
+```bash
+docker-compose down
+export PUID=0 PGID=0
+make build-no-cache
+docker-compose up
 ```
