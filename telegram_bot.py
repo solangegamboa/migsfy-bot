@@ -292,34 +292,6 @@ Exemplo: `/search Linkin Park - In the End`
         elif query.data == "clear_history_no":
             await query.edit_message_text("❌ Operação cancelada")
     
-    async def handle_unknown_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Manipula mensagens de texto não reconhecidas"""
-        if not self._is_authorized(update.effective_user.id):
-            return
-        
-        help_text = """
-❓ **Comando não reconhecido**
-
-Use apenas os comandos disponíveis:
-
-🎵 **Para buscar música:**
-`/search <termo>`
-Exemplo: `/search Radiohead - Creep`
-
-🎵 **Para playlist do Spotify:**
-`/spotify <url>`
-Exemplo: `/spotify https://open.spotify.com/playlist/ID`
-
-📋 **Outros comandos:**
-`/help` - Ajuda completa
-`/history` - Ver histórico
-`/status` - Status dos serviços
-
-💡 Digite `/help` para ver todos os comandos disponíveis.
-        """
-        
-        await update.message.reply_text(help_text, parse_mode='Markdown')
-    
     async def _handle_music_search(self, update: Update, search_term: str):
         """Manipula busca de música"""
         if not self.slskd:
@@ -507,7 +479,7 @@ Exemplo: `/spotify https://open.spotify.com/playlist/ID`
         # Cria aplicação
         application = Application.builder().token(self.bot_token).build()
         
-        # Adiciona handlers de comandos
+        # Adiciona handlers de comandos específicos
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("status", self.status_command))
@@ -517,11 +489,11 @@ Exemplo: `/spotify https://open.spotify.com/playlist/ID`
         application.add_handler(CommandHandler("clear_history", self.clear_history_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback_query))
         
-        # Handler para mensagens de texto não reconhecidas (deve ser o último)
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_unknown_message))
+        # NÃO adiciona handler para mensagens de texto - elas serão ignoradas
         
         # Inicia o bot
         logger.info("✅ Bot iniciado! Pressione Ctrl+C para parar.")
+        logger.info("🔇 Mensagens que não sejam comandos serão ignoradas")
         application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

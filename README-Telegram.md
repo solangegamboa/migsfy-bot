@@ -96,7 +96,7 @@ Para descobrir seu ID do Telegram:
 - `/history` - Mostra histórico de downloads
 - `/clear_history` - Limpa histórico (com confirmação)
 
-**⚠️ IMPORTANTE:** O bot agora funciona APENAS com comandos específicos. Não é possível enviar mensagens de texto livres.
+**⚠️ IMPORTANTE:** O bot agora funciona APENAS com comandos específicos. Mensagens que não sejam comandos são **completamente ignoradas** (não há resposta).
 
 ## 🔧 Funcionalidades
 
@@ -202,21 +202,18 @@ Bot: 🎵 My Playlist
      ⏳ Iniciando downloads...
 ```
 
-### Mensagem Não Reconhecida
+### Mensagem Ignorada
 
 ```
 Usuário: Radiohead - Creep
-Bot: ❓ Comando não reconhecido
-     
-     Use apenas os comandos disponíveis:
-     
-     🎵 Para buscar música:
-     /search <termo>
-     
-     🎵 Para playlist do Spotify:
-     /spotify <url>
-     
-     💡 Digite /help para ver todos os comandos disponíveis.
+Bot: (sem resposta - mensagem ignorada)
+
+Usuário: https://open.spotify.com/playlist/ID
+Bot: (sem resposta - mensagem ignorada)
+
+Usuário: /search Radiohead - Creep
+Bot: 🔍 Buscando: Radiohead - Creep
+     ✅ Busca iniciada...
 ```
 
 ## 🛠️ Desenvolvimento

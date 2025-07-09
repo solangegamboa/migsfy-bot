@@ -61,12 +61,13 @@ Este arquivo contém exemplos práticos de como usar o bot do Telegram.
 
 ## ❌ O que NÃO funciona mais
 
-Estas mensagens **NÃO** funcionam mais:
+Estas mensagens são **COMPLETAMENTE IGNORADAS** (sem resposta):
 
 ```
-❌ Radiohead - Creep
-❌ https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
-❌ Linkin Park - In the End
+❌ Radiohead - Creep                                    (ignorada)
+❌ https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M  (ignorada)
+❌ Linkin Park - In the End                             (ignorada)
+❌ Qualquer texto que não seja comando                  (ignorada)
 ```
 
 **Use sempre os comandos específicos:**
@@ -112,7 +113,9 @@ Estas mensagens **NÃO** funcionam mais:
 ## 💡 Dicas
 
 - **Sempre use comandos**: O bot não processa mensagens de texto livres
+- **Mensagens ignoradas**: Textos que não sejam comandos são completamente ignorados (sem resposta)
 - **Copie URLs completas**: Use URLs completas do Spotify para melhor compatibilidade
 - **Use opções**: Combine `limit=N` e `remove=yes` conforme necessário
 - **Verifique status**: Use `/status` se algo não estiver funcionando
 - **Consulte histórico**: Use `/history` para ver downloads anteriores
+- **Sem feedback de erro**: Se não há resposta, provavelmente você não usou um comando válido

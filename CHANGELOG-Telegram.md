@@ -1,5 +1,19 @@
 # 📝 Changelog - Bot do Telegram
 
+## 🔄 Versão 2.1 - Ignorar Mensagens Não Reconhecidas
+
+### ✅ Mudanças Implementadas
+
+#### 🔇 **Mensagens Ignoradas**
+- **ANTES**: Mensagens não reconhecidas recebiam resposta de ajuda
+- **AGORA**: Mensagens que não sejam comandos são **completamente ignoradas**
+- **COMPORTAMENTO**: Sem resposta, sem feedback, sem processamento
+
+#### 🎯 **Comandos Únicos**
+- Apenas comandos mapeados são processados
+- Qualquer outra mensagem é silenciosamente ignorada
+- Reduz spam e melhora performance
+
 ## 🔄 Versão 2.0 - Comandos Específicos
 
 ### ✅ Mudanças Implementadas
@@ -55,8 +69,10 @@
 1. **🎯 Maior Controle**: Comandos específicos evitam interpretações incorretas
 2. **🔒 Mais Seguro**: Reduz chance de execução acidental de comandos
 3. **📖 Mais Claro**: Interface mais intuitiva e previsível
-4. **🛠️ Mais Robusto**: Melhor tratamento de erros e mensagens não reconhecidas
-5. **📚 Melhor UX**: Feedback claro quando comando não é reconhecido
+4. **🛠️ Mais Robusto**: Melhor tratamento de erros
+5. **📚 Melhor UX**: Sem spam de mensagens de erro
+6. **⚡ Melhor Performance**: Não processa mensagens desnecessárias
+7. **🔇 Menos Ruído**: Ignora completamente mensagens não reconhecidas
 
 ### ⚠️ **Breaking Changes**
 
