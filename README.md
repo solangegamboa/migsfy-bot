@@ -213,10 +213,12 @@ make telegram-bot
 # Comandos do bot:
 # /start - Iniciar bot
 # /search <termo> - Buscar música
+# /album <artista - álbum> - Buscar álbum (🆕 com seleção de candidatos!)
 # /spotify <url> - Baixar playlist
 # /history - Ver histórico
 # /info - Informações do chat (IDs para configuração)
 # Exemplo: /search Artista - Música
+# Exemplo: /album Pink Floyd - The Dark Side of the Moon
 # Exemplo: /spotify https://open.spotify.com/playlist/ID
 ```
 
@@ -453,6 +455,35 @@ python3 slskd-mp3-search.py --monitor
 # Download individual sem limpeza automática
 python3 slskd-mp3-search.py "Artista - Música" --no-auto-cleanup
 ```
+
+## 🆕 Nova Funcionalidade: Seleção de Álbuns no Telegram
+
+### 🎯 Seleção Inteligente de Álbuns
+Agora ao usar o comando `/album` no bot do Telegram, você verá os **5 melhores álbuns encontrados** e poderá escolher qual baixar!
+
+**Como funciona:**
+1. `/album Pink Floyd - The Dark Side of the Moon`
+2. Bot mostra lista com 5 opções ordenadas por qualidade
+3. Cada opção mostra: nome, usuário, número de faixas, bitrate e tamanho
+4. Você clica no botão do álbum desejado
+5. Download é iniciado automaticamente
+
+**Informações mostradas:**
+- 📀 Nome do álbum
+- 👤 Usuário que compartilha
+- 🎵 Número de faixas
+- 🎧 Bitrate médio (qualidade)
+- 💾 Tamanho total
+
+**Vantagens:**
+- ✅ Controle total sobre qual versão baixar
+- ✅ Comparação fácil entre opções
+- ✅ Evita downloads de baixa qualidade
+- ✅ Cancelamento a qualquer momento
+- ✅ Feedback em tempo real
+- ✅ **Nomes reais dos álbuns** extraídos automaticamente (não mais "Álbum Desconhecido")
+
+Veja [CHANGELOG-Album-Selection.md](CHANGELOG-Album-Selection.md) para detalhes técnicos e [TELEGRAM-ALBUM-EXAMPLE.md](TELEGRAM-ALBUM-EXAMPLE.md) para exemplos visuais.
 
 ## 📝 Licença
 

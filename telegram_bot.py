@@ -2,6 +2,7 @@
 
 import os
 import sys
+import re
 import asyncio
 import logging
 from datetime import datetime
@@ -83,6 +84,10 @@ class TelegramMusicBot:
         self.spotify_client = None
         self.spotify_user_client = None
         
+        # Sistema de controle de tarefas ativas
+        self.active_tasks = {}  # {task_id: {'task': asyncio.Task, 'type': str, 'user_id': int, 'chat_id': int}}
+        self.task_counter = 0
+        
         if not self.bot_token:
             raise ValueError("TELEGRAM_BOT_TOKEN não encontrado no .env")
         
@@ -142,6 +147,65 @@ class TelegramMusicBot:
                 logger.info("✅ Cliente Spotify configurado")
         except Exception as e:
             logger.error(f"❌ Erro ao configurar Spotify: {e}")
+    
+    def _create_task_id(self) -> str:
+        """Cria um ID único para a tarefa"""
+        self.task_counter += 1
+        return f"task_{self.task_counter}"
+    
+    def _register_task(self, task: asyncio.Task, task_type: str, user_id: int, chat_id: int) -> str:
+        """Registra uma tarefa ativa"""
+        task_id = self._create_task_id()
+        self.active_tasks[task_id] = {
+            'task': task,
+            'type': task_type,
+            'user_id': user_id,
+            'chat_id': chat_id,
+            'created_at': datetime.now()
+        }
+        logger.info(f"Tarefa registrada: {task_id} ({task_type}) para usuário {user_id}")
+        return task_id
+    
+    def _unregister_task(self, task_id: str):
+        """Remove uma tarefa do registro"""
+        if task_id in self.active_tasks:
+            del self.active_tasks[task_id]
+            logger.info(f"Tarefa removida: {task_id}")
+    
+    def _cancel_task(self, task_id: str) -> bool:
+        """Cancela uma tarefa específica"""
+        if task_id in self.active_tasks:
+            task_info = self.active_tasks[task_id]
+            task = task_info['task']
+            
+            if not task.done():
+                task.cancel()
+                logger.info(f"Tarefa cancelada: {task_id} ({task_info['type']})")
+                self._unregister_task(task_id)
+                return True
+            else:
+                self._unregister_task(task_id)
+                return False
+        return False
+    
+    def _get_user_tasks(self, user_id: int, chat_id: int) -> list:
+        """Obtém tarefas ativas de um usuário em um chat específico"""
+        user_tasks = []
+        for task_id, task_info in self.active_tasks.items():
+            if task_info['user_id'] == user_id and task_info['chat_id'] == chat_id:
+                if not task_info['task'].done():
+                    user_tasks.append((task_id, task_info))
+                else:
+                    # Remove tarefas concluídas automaticamente
+                    self._unregister_task(task_id)
+        return user_tasks
+    
+    def _create_cancel_keyboard(self, task_id: str) -> InlineKeyboardMarkup:
+        """Cria teclado inline com botão de cancelar"""
+        keyboard = [
+            [InlineKeyboardButton("🛑 Cancelar Busca", callback_data=f"cancel_{task_id}")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
     
     def _is_authorized(self, update: Update) -> bool:
         """Verifica se usuário/grupo/thread está autorizado"""
@@ -209,10 +273,11 @@ class TelegramMusicBot:
 Bem-vindo! Este bot permite buscar e baixar músicas usando slskd e Spotify.
 
 **Comandos disponíveis:**
-/help - Mostra esta ajuda
+/help - Mostra ajuda completa
 /search <termo> - Busca uma música
 /album <artista - álbum> - Busca álbum completo
 /spotify <url> - Baixa playlist do Spotify
+/tasks - Ver e cancelar tarefas ativas
 /history - Mostra histórico de downloads
 /status - Status dos serviços
 
@@ -221,7 +286,9 @@ Bem-vindo! Este bot permite buscar e baixar músicas usando slskd e Spotify.
 `/album Pink Floyd - The Dark Side of the Moon`
 `/spotify https://open.spotify.com/playlist/...`
 
-💡 Use apenas os comandos acima para interagir com o bot.
+🛑 **Novo:** Todas as buscas agora podem ser canceladas! Use os botões que aparecem ou `/tasks` para gerenciar.
+
+💡 Use `/help` para ver todos os comandos e opções disponíveis.
         """
         
         await update.message.reply_text(welcome_text, parse_mode='Markdown')
@@ -240,6 +307,7 @@ Exemplo: `/search Linkin Park - In the End`
 
 **Busca de Álbum:**
 `/album <artista - álbum>` - Busca álbum completo
+🆕 **Novo:** Mostra os 5 melhores álbuns encontrados para você escolher!
 Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 
 **Spotify:**
@@ -251,6 +319,9 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 `/history` - Ver downloads
 `/clear_history` - Limpar histórico
 
+**Controle de Tarefas:**
+`/tasks` - Ver tarefas ativas e cancelar
+
 **Sistema:**
 `/status` - Status dos serviços
 `/info` - Informações do chat atual
@@ -261,6 +332,10 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 `/album Beatles - Abbey Road`
 `/spotify https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M`
 `/spotify https://spotify.com/playlist/ID limit=5 remove=yes`
+
+💡 **Cancelamento:** Todas as buscas e downloads mostram um botão 🛑 para cancelar. Use `/tasks` para ver todas as tarefas ativas.
+
+🆕 **Seleção de Álbuns:** Ao buscar álbuns, você verá uma lista com os melhores matches encontrados, incluindo número de faixas, qualidade e tamanho. Clique no botão do álbum desejado para iniciar o download!
         """
         
         await update.message.reply_text(help_text, parse_mode='Markdown')
@@ -427,22 +502,38 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
                 info_text += f"(substitua THREAD_ID pelo ID da thread desejada)"
         
         await update.message.reply_text(info_text, parse_mode='Markdown')
+    
+    async def tasks_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Comando /tasks - mostra tarefas ativas do usuário"""
+        if not self._is_authorized(update):
+            return
         
-        if chat.type == 'private':
-            info_text += f"Adicione ao .env:\n`TELEGRAM_ALLOWED_USERS={user.id}`"
-        elif chat.type in ['group', 'supergroup']:
-            info_text += f"Para permitir todo o grupo:\n`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n\n"
-            if thread_id:
-                info_text += f"Para permitir apenas esta thread:\n"
-                info_text += f"`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n"
-                info_text += f"`TELEGRAM_ALLOWED_THREADS={chat.id}:{thread_id}`"
-            else:
-                info_text += f"Para permitir apenas uma thread específica:\n"
-                info_text += f"`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n"
-                info_text += f"`TELEGRAM_ALLOWED_THREADS={chat.id}:THREAD_ID`\n"
-                info_text += f"(substitua THREAD_ID pelo ID da thread desejada)"
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
         
-        await update.message.reply_text(info_text, parse_mode='Markdown')
+        user_tasks = self._get_user_tasks(user_id, chat_id)
+        
+        if not user_tasks:
+            await update.message.reply_text("📝 Nenhuma tarefa ativa no momento")
+            return
+        
+        tasks_text = "🔄 **Tarefas Ativas:**\n\n"
+        keyboard = []
+        
+        for task_id, task_info in user_tasks:
+            task_type = task_info['type']
+            created_at = task_info['created_at'].strftime('%H:%M:%S')
+            
+            tasks_text += f"• **{task_type}** (ID: `{task_id}`)\n"
+            tasks_text += f"  Iniciada às {created_at}\n\n"
+            
+            # Adiciona botão de cancelar para cada tarefa
+            keyboard.append([
+                InlineKeyboardButton(f"🛑 Cancelar {task_type}", callback_data=f"cancel_{task_id}")
+            ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+        await update.message.reply_text(tasks_text, parse_mode='Markdown', reply_markup=reply_markup)
     
     async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Manipula botões inline"""
@@ -461,6 +552,187 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
         
         elif query.data == "clear_history_no":
             await query.edit_message_text("❌ Operação cancelada")
+        
+        elif query.data == "album_cancel":
+            await query.edit_message_text("❌ Seleção de álbum cancelada")
+        
+        elif query.data.startswith("album_"):
+            # Processa seleção de álbum
+            await self._handle_album_selection(query)
+        
+        elif query.data.startswith("cancel_"):
+            # Extrai o task_id do callback data
+            task_id = query.data[7:]  # Remove "cancel_" prefix
+            
+            # Verifica se a tarefa pertence ao usuário
+            user_id = update.effective_user.id
+            chat_id = update.effective_chat.id
+            
+            if task_id in self.active_tasks:
+                task_info = self.active_tasks[task_id]
+                
+                # Verifica se o usuário tem permissão para cancelar esta tarefa
+                if task_info['user_id'] == user_id and task_info['chat_id'] == chat_id:
+                    if self._cancel_task(task_id):
+                        await query.edit_message_text(f"🛑 Tarefa cancelada: {task_info['type']}")
+                    else:
+                        await query.edit_message_text("❌ Tarefa já foi concluída ou não pôde ser cancelada")
+                else:
+                    await query.edit_message_text("❌ Você não tem permissão para cancelar esta tarefa")
+            else:
+                await query.edit_message_text("❌ Tarefa não encontrada ou já foi concluída")
+    
+    async def _handle_album_selection(self, query):
+        """Manipula seleção de álbum pelo usuário"""
+        try:
+            # Parse do callback data: album_{index}_{query_hash}
+            parts = query.data.split('_')
+            if len(parts) != 3:
+                await query.edit_message_text("❌ Dados inválidos")
+                return
+            
+            album_index = int(parts[1])
+            query_hash = int(parts[2])
+            
+            # Recupera candidatos do cache
+            if not hasattr(self, '_album_candidates_cache') or query_hash not in self._album_candidates_cache:
+                await query.edit_message_text("❌ Dados expirados. Faça uma nova busca.")
+                return
+            
+            cache_data = self._album_candidates_cache[query_hash]
+            candidates = cache_data['candidates']
+            original_query = cache_data['original_query']
+            
+            if album_index >= len(candidates):
+                await query.edit_message_text("❌ Álbum inválido")
+                return
+            
+            selected_album = candidates[album_index]
+            
+            # Inicia download do álbum selecionado
+            await self._start_album_download(query, selected_album, original_query)
+            
+            # Remove do cache após uso
+            del self._album_candidates_cache[query_hash]
+            
+        except (ValueError, IndexError) as e:
+            await query.edit_message_text(f"❌ Erro ao processar seleção: {e}")
+        except Exception as e:
+            await query.edit_message_text(f"❌ Erro inesperado: {e}")
+    
+    async def _start_album_download(self, query, album_info: dict, original_query: str):
+        """Inicia o download do álbum selecionado"""
+        user_id = query.from_user.id
+        chat_id = query.message.chat_id
+        
+        album_name = self._extract_album_name_from_metadata(album_info)
+        clean_album_name = self._escape_markdown(album_name)
+        clean_username = self._escape_markdown(album_info['username'])
+        
+        # Cria tarefa para o download
+        task = asyncio.create_task(self._execute_album_download(album_info, original_query))
+        task_id = self._register_task(task, f"Download de Álbum", user_id, chat_id)
+        
+        # Atualiza mensagem com informações do download (sem formatação markdown)
+        cancel_keyboard = self._create_cancel_keyboard(task_id)
+        
+        download_text = f"💿 Baixando Álbum Selecionado\n\n"
+        download_text += f"📀 {clean_album_name}\n"
+        download_text += f"👤 Usuário: {clean_username}\n"
+        download_text += f"🎵 Faixas: {album_info['track_count']}\n"
+        download_text += f"🎧 Bitrate médio: {album_info['avg_bitrate']:.0f} kbps\n"
+        download_text += f"💾 Tamanho: {album_info['total_size'] / 1024 / 1024:.1f} MB\n\n"
+        download_text += f"⏳ Iniciando downloads...\n"
+        download_text += f"💡 Use o botão abaixo para cancelar se necessário"
+        
+        try:
+            await query.edit_message_text(download_text, reply_markup=cancel_keyboard)
+        except Exception as e:
+            logger.error(f"Erro ao atualizar mensagem de download: {e}")
+            # Fallback simples
+            await query.edit_message_text(f"💿 Baixando: {clean_album_name}", reply_markup=cancel_keyboard)
+        
+        try:
+            # Aguarda conclusão do download
+            result = await task
+            
+            if result['success']:
+                final_text = f"✅ Álbum baixado com sucesso!\n\n"
+                final_text += f"📀 {clean_album_name}\n"
+                final_text += f"✅ Downloads iniciados: {result['successful']}\n"
+                final_text += f"❌ Falhas: {result['failed']}\n\n"
+                final_text += f"💡 Monitore o progresso na interface web do slskd"
+                
+                await query.edit_message_text(final_text)
+            else:
+                error_msg = f"❌ Falha no download do álbum: {result.get('error', 'Erro desconhecido')}"
+                await query.edit_message_text(error_msg)
+                
+        except asyncio.CancelledError:
+            cancel_msg = f"🛑 Download do álbum cancelado: {clean_album_name}"
+            await query.edit_message_text(cancel_msg)
+        except Exception as e:
+            error_msg = f"❌ Erro durante download: {str(e)}"
+            await query.edit_message_text(error_msg)
+        finally:
+            self._unregister_task(task_id)
+    
+    async def _execute_album_download(self, album_info: dict, search_term: str) -> dict:
+        """Executa o download do álbum de forma assíncrona"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._download_album_tracks, album_info, search_term)
+    
+    def _download_album_tracks(self, album_info: dict, search_term: str) -> dict:
+        """Baixa todas as faixas de um álbum"""
+        from slskd_mp3_search import download_mp3
+        import time
+        import os
+        
+        username = album_info['username']
+        files = album_info['files']
+        
+        print(f"\n📥 Iniciando download de {len(files)} faixas do álbum...")
+        
+        successful_downloads = 0
+        failed_downloads = 0
+        
+        try:
+            for i, file_info in enumerate(files, 1):
+                filename = file_info.get('filename', '')
+                file_size = file_info.get('size', 0)
+                
+                print(f"\n📍 [{i}/{len(files)}] {os.path.basename(filename)}")
+                print(f"   💾 Tamanho: {file_size / 1024 / 1024:.2f} MB")
+                print(f"   🎧 Bitrate: {file_info.get('bitRate', 0)} kbps")
+                
+                # Tenta fazer o download
+                success = download_mp3(self.slskd, username, filename, file_size, f"{search_term} - {os.path.basename(filename)}")
+                
+                if success:
+                    successful_downloads += 1
+                    print(f"   ✅ Download iniciado com sucesso")
+                else:
+                    failed_downloads += 1
+                    print(f"   ❌ Falha no download")
+                
+                # Pausa entre downloads
+                if i < len(files):
+                    time.sleep(1)
+            
+            return {
+                'success': True,
+                'successful': successful_downloads,
+                'failed': failed_downloads
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro durante download do álbum: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'successful': successful_downloads,
+                'failed': failed_downloads
+            }
     
     async def _handle_music_search(self, update: Update, search_term: str):
         """Manipula busca de música"""
@@ -468,41 +740,285 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
             await update.message.reply_text("❌ SLSKD não está conectado")
             return
         
-        # Mensagem de progresso
-        progress_msg = await update.message.reply_text(f"🔍 Buscando: {search_term}")
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        # Cria tarefa para a busca
+        task = asyncio.create_task(self._execute_music_search(search_term))
+        task_id = self._register_task(task, "Busca de Música", user_id, chat_id)
+        
+        # Mensagem de progresso com botão de cancelar
+        cancel_keyboard = self._create_cancel_keyboard(task_id)
+        progress_msg = await update.message.reply_text(
+            f"🔍 Buscando: {search_term}\n💡 Use o botão abaixo para cancelar se necessário",
+            reply_markup=cancel_keyboard
+        )
         
         try:
-            # Executa busca
-            success = smart_mp3_search(self.slskd, search_term)
+            # Aguarda resultado da busca
+            success = await task
             
             if success:
-                await progress_msg.edit_text(f"✅ Busca iniciada: {search_term}\n💡 Download em andamento no slskd")
+                await progress_msg.edit_text(f"✅ Busca concluída: {search_term}\n💡 Download em andamento no slskd")
             else:
                 await progress_msg.edit_text(f"❌ Nenhum resultado encontrado para: {search_term}")
                 
+        except asyncio.CancelledError:
+            await progress_msg.edit_text(f"🛑 Busca cancelada: {search_term}")
         except Exception as e:
             await progress_msg.edit_text(f"❌ Erro na busca: {e}")
+        finally:
+            # Remove tarefa do registro
+            self._unregister_task(task_id)
+    
+    async def _execute_music_search(self, search_term: str) -> bool:
+        """Executa a busca de música de forma assíncrona"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, smart_mp3_search, self.slskd, search_term)
     
     async def _handle_album_search(self, update: Update, album_query: str):
-        """Manipula busca de álbum"""
+        """Manipula busca de álbum com seleção de candidatos"""
         if not self.slskd:
             await update.message.reply_text("❌ SLSKD não está conectado")
             return
         
-        # Mensagem de progresso
-        progress_msg = await update.message.reply_text(f"💿 Buscando álbum: {album_query}")
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        # Cria tarefa para a busca de álbum
+        task = asyncio.create_task(self._execute_album_search_candidates(album_query))
+        task_id = self._register_task(task, "Busca de Álbum", user_id, chat_id)
+        
+        # Mensagem de progresso com botão de cancelar
+        cancel_keyboard = self._create_cancel_keyboard(task_id)
+        progress_msg = await update.message.reply_text(
+            f"💿 Buscando álbum: {album_query}\n💡 Use o botão abaixo para cancelar se necessário",
+            reply_markup=cancel_keyboard
+        )
         
         try:
-            # Executa busca de álbum
-            success = smart_album_search(self.slskd, album_query)
+            # Aguarda resultado da busca
+            album_candidates = await task
             
-            if success:
-                await progress_msg.edit_text(f"✅ Álbum encontrado: {album_query}\n💿 Download em andamento no slskd\n💡 Verifique o progresso na interface web")
+            if album_candidates:
+                # Mostra os 5 melhores candidatos com botões
+                await self._show_album_candidates(progress_msg, album_candidates, album_query)
             else:
                 await progress_msg.edit_text(f"❌ Nenhum álbum encontrado para: {album_query}\n💡 Tente:\n• Verificar a grafia\n• Usar formato 'Artista - Álbum'\n• Buscar por música individual com /search")
                 
+        except asyncio.CancelledError:
+            await progress_msg.edit_text(f"🛑 Busca de álbum cancelada: {album_query}")
         except Exception as e:
             await progress_msg.edit_text(f"❌ Erro na busca de álbum: {e}")
+        finally:
+            # Remove tarefa do registro
+            self._unregister_task(task_id)
+    
+    async def _execute_album_search_candidates(self, album_query: str) -> list:
+        """Executa a busca de álbum e retorna candidatos sem fazer download"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._search_album_candidates, album_query)
+    
+    def _search_album_candidates(self, album_query: str) -> list:
+        """Busca candidatos de álbum sem fazer download automático"""
+        from slskd_mp3_search import (
+            is_duplicate_download, extract_artist_and_album, 
+            create_album_search_variations, wait_for_search_completion,
+            find_album_candidates
+        )
+        import os
+        
+        print(f"💿 Busca inteligente por ÁLBUM: '{album_query}'")
+        
+        # Verifica se já foi baixado anteriormente
+        if is_duplicate_download(album_query):
+            print(f"⏭️ Pulando busca - álbum já baixado anteriormente")
+            return []
+        
+        artist, album = extract_artist_and_album(album_query)
+        if artist and album:
+            print(f"🎤 Artista: '{artist}' | 💿 Álbum: '{album}'")
+        
+        variations = create_album_search_variations(album_query)
+        print(f"📝 {len(variations)} variações criadas para álbum")
+        
+        all_candidates = []
+        
+        for i, search_term in enumerate(variations, 1):
+            print(f"\n📍 Tentativa {i}/{len(variations)}: '{search_term}'")
+            
+            try:
+                print(f"🔍 Buscando álbum: '{search_term}'")
+                
+                search_result = self.slskd.searches.search_text(search_term)
+                search_id = search_result.get('id')
+                
+                # Aguarda a busca finalizar
+                search_responses = wait_for_search_completion(self.slskd, search_id, max_wait=int(os.getenv('SEARCH_WAIT_TIME', 25)))
+                
+                if not search_responses:
+                    print("❌ Nenhuma resposta")
+                    continue
+                
+                # Conta total de arquivos encontrados
+                total_files = sum(len(response.get('files', [])) for response in search_responses)
+                print(f"📊 Total de arquivos encontrados: {total_files}")
+                
+                if total_files > 0:
+                    # Para álbuns, procura por múltiplos arquivos do mesmo usuário/diretório
+                    album_candidates = find_album_candidates(search_responses, album_query)
+                    
+                    if album_candidates:
+                        print(f"💿 Encontrados {len(album_candidates)} candidatos a álbum")
+                        all_candidates.extend(album_candidates)
+                        
+                        # Se encontrou bons candidatos, para a busca
+                        if len(all_candidates) >= 5:
+                            break
+            
+            except Exception as e:
+                print(f"❌ Erro na busca: {e}")
+        
+        # Remove duplicatas e ordena por qualidade
+        unique_candidates = {}
+        for candidate in all_candidates:
+            key = f"{candidate['username']}:{candidate['directory']}"
+            if key not in unique_candidates or candidate['track_count'] > unique_candidates[key]['track_count']:
+                unique_candidates[key] = candidate
+        
+        final_candidates = list(unique_candidates.values())
+        final_candidates.sort(key=lambda x: (x['track_count'], x['avg_bitrate']), reverse=True)
+        
+        # Retorna os 5 melhores
+        return final_candidates[:5]
+    
+    def _escape_markdown(self, text: str) -> str:
+        """Escapa caracteres especiais do Markdown para evitar erros de parsing"""
+        if not text:
+            return ""
+        
+        # Remove ou substitui caracteres problemáticos
+        # Em vez de escapar, vamos limpar o texto
+        cleaned_text = text
+        
+        # Remove caracteres que podem causar problemas
+        problematic_chars = ['*', '_', '[', ']', '`', '\\']
+        for char in problematic_chars:
+            cleaned_text = cleaned_text.replace(char, '')
+        
+        # Substitui outros caracteres problemáticos
+        cleaned_text = cleaned_text.replace('(', '\\(')
+        cleaned_text = cleaned_text.replace(')', '\\)')
+        
+        return cleaned_text
+    
+    def _safe_format_text(self, text: str, use_markdown: bool = True) -> str:
+        """Formata texto de forma segura para o Telegram"""
+        if not use_markdown:
+            return text
+        
+        # Remove formatação markdown existente e aplica escape
+        clean_text = text.replace('**', '').replace('*', '').replace('__', '').replace('_', '')
+        return clean_text
+    
+    async def _show_album_candidates(self, message, candidates: list, original_query: str):
+        """Mostra candidatos de álbum com botões para seleção"""
+        if not candidates:
+            await message.edit_text("❌ Nenhum álbum encontrado")
+            return
+        
+        # Texto com informações dos álbuns (sem formatação markdown para evitar erros)
+        text = f"💿 Álbuns encontrados para: {original_query}\n\n"
+        text += "📋 Selecione um álbum para baixar:\n\n"
+        
+        # Botões para cada álbum
+        keyboard = []
+        
+        for i, candidate in enumerate(candidates, 1):
+            # Informações do álbum no texto usando metadados
+            album_name = self._extract_album_name_from_metadata(candidate)
+            username = candidate['username']
+            
+            # Limpa caracteres problemáticos
+            clean_album_name = self._escape_markdown(album_name)
+            clean_username = self._escape_markdown(username)
+            
+            text += f"{i}. {clean_album_name}\n"
+            text += f"   👤 {clean_username}\n"
+            text += f"   🎵 {candidate['track_count']} faixas\n"
+            text += f"   🎧 {candidate['avg_bitrate']:.0f} kbps\n"
+            text += f"   💾 {candidate['total_size'] / 1024 / 1024:.1f} MB\n\n"
+            
+            # Botão para este álbum (também limpa o texto do botão)
+            button_album_name = album_name.replace('[', '').replace(']', '').replace('*', '').replace('_', '')
+            button_text = f"💿 {i}. {button_album_name} ({candidate['track_count']} faixas)"
+            
+            # Limita tamanho do botão
+            if len(button_text) > 64:  # Limite do Telegram
+                short_name = button_album_name[:35] + "..."
+                button_text = f"💿 {i}. {short_name} ({candidate['track_count']} faixas)"
+            
+            # Dados do callback incluem índice e query original
+            callback_data = f"album_{i-1}_{hash(original_query) % 10000}"
+            
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+        
+        # Botão de cancelar
+        keyboard.append([InlineKeyboardButton("❌ Cancelar", callback_data="album_cancel")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Armazena candidatos temporariamente para uso nos callbacks
+        query_hash = hash(original_query) % 10000
+        if not hasattr(self, '_album_candidates_cache'):
+            self._album_candidates_cache = {}
+        self._album_candidates_cache[query_hash] = {
+            'candidates': candidates,
+            'original_query': original_query,
+            'timestamp': datetime.now()
+        }
+        
+        # Envia mensagem sem formatação markdown para evitar erros
+        try:
+            await message.edit_text(text, reply_markup=reply_markup)
+        except Exception as e:
+            logger.error(f"Erro ao exibir candidatos: {e}")
+            # Fallback ainda mais simples
+            simple_text = f"💿 Encontrados {len(candidates)} álbuns para: {original_query}\n\nUse os botões abaixo para selecionar:"
+            try:
+                await message.edit_text(simple_text, reply_markup=reply_markup)
+            except Exception as e2:
+                logger.error(f"Erro mesmo com texto simples: {e2}")
+                await message.edit_text("❌ Erro ao exibir resultados. Tente novamente.")
+    
+    def _extract_album_name_from_path(self, directory_path: str) -> str:
+        """Extrai nome do álbum do caminho do diretório"""
+        if not directory_path:
+            return "Álbum Desconhecido"
+        
+        # Pega o último diretório do caminho
+        album_name = os.path.basename(directory_path)
+        
+        # Se estiver vazio, pega o penúltimo
+        if not album_name:
+            parts = directory_path.rstrip('/\\').split('/')
+            if len(parts) > 1:
+                album_name = parts[-2]
+        
+        # Limita o tamanho
+        if len(album_name) > 50:
+            album_name = album_name[:47] + "..."
+        
+        return album_name or "Álbum Desconhecido"
+    
+    def _extract_album_name_from_metadata(self, candidate: dict) -> str:
+        """Extrai nome do álbum usando o módulo especializado"""
+        try:
+            from album_name_extractor import get_album_name
+            return get_album_name(candidate)
+        except ImportError:
+            # Fallback para método básico se módulo não disponível
+            return self._extract_album_name_from_path(candidate['directory'])
     
     async def _handle_playlist_download(self, update: Update, playlist_url: str, options: dict):
         """Manipula download de playlist"""
@@ -514,7 +1030,10 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
             await update.message.reply_text("❌ SLSKD não está conectado")
             return
         
-        # Mensagem de progresso
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        # Mensagem de progresso inicial
         progress_msg = await update.message.reply_text(f"🎵 Processando playlist...")
         
         try:
@@ -560,21 +1079,32 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
             if max_tracks:
                 tracks = tracks[:max_tracks]
             
+            # Cria tarefa para o download da playlist
+            task = asyncio.create_task(self._download_playlist_background(
+                progress_msg, tracks, playlist_name, playlist_id, 
+                remove_from_playlist, max_tracks
+            ))
+            task_id = self._register_task(task, "Download de Playlist", user_id, chat_id)
+            
+            # Atualiza mensagem com botão de cancelar
+            cancel_keyboard = self._create_cancel_keyboard(task_id)
             info_text = f"🎵 **{playlist_name}**\n"
             info_text += f"📊 {len(tracks)} faixas"
             if max_tracks and total_tracks > max_tracks:
                 info_text += f" (de {total_tracks} total)"
             if remove_from_playlist:
                 info_text += f"\n🗑️ Faixas encontradas serão removidas da playlist"
-            info_text += f"\n\n⏳ Iniciando downloads..."
+            info_text += f"\n\n⏳ Iniciando downloads...\n💡 Use o botão abaixo para cancelar se necessário"
             
-            await progress_msg.edit_text(info_text, parse_mode='Markdown')
+            await progress_msg.edit_text(info_text, parse_mode='Markdown', reply_markup=cancel_keyboard)
             
-            # Inicia downloads em background
-            asyncio.create_task(self._download_playlist_background(
-                progress_msg, tracks, playlist_name, playlist_id, 
-                remove_from_playlist, max_tracks
-            ))
+            # Aguarda conclusão da tarefa
+            try:
+                await task
+            except asyncio.CancelledError:
+                await progress_msg.edit_text(f"🛑 Download de playlist cancelado: {playlist_name}", parse_mode='Markdown')
+            finally:
+                self._unregister_task(task_id)
             
         except Exception as e:
             await progress_msg.edit_text(f"❌ Erro ao processar playlist: {e}")
@@ -589,6 +1119,10 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
             removed_from_playlist_count = 0
             
             for i, track in enumerate(tracks, 1):
+                # Verifica se a tarefa foi cancelada
+                if asyncio.current_task().cancelled():
+                    raise asyncio.CancelledError()
+                
                 search_term = track['search_term']
                 
                 # Atualiza progresso
@@ -618,9 +1152,11 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
                             removed_from_playlist_count += 1
                     continue
                 
-                # Tenta download
+                # Tenta download de forma assíncrona
                 try:
-                    success = smart_mp3_search(self.slskd, search_term)
+                    loop = asyncio.get_event_loop()
+                    success = await loop.run_in_executor(None, smart_mp3_search, self.slskd, search_term)
+                    
                     if success:
                         successful_downloads += 1
                         
@@ -635,8 +1171,35 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
                 except Exception:
                     failed_downloads += 1
                 
-                # Pausa entre downloads
-                await asyncio.sleep(2)
+                # Pausa entre downloads (cancelável)
+                try:
+                    await asyncio.sleep(2)
+                except asyncio.CancelledError:
+                    raise
+            
+            # Relatório final
+            final_text = f"🎵 **{playlist_name}** - Concluído!\n\n"
+            final_text += f"📊 **Relatório Final:**\n"
+            final_text += f"✅ Downloads iniciados: {successful_downloads}\n"
+            final_text += f"⏭️ Duplicatas puladas: {skipped_duplicates}\n"
+            final_text += f"❌ Falhas: {failed_downloads}\n"
+            
+            if remove_from_playlist:
+                final_text += f"🗑️ Removidas da playlist: {removed_from_playlist_count}\n"
+            
+            final_text += f"\n💡 Monitore o progresso no slskd web interface"
+            
+            await progress_msg.edit_text(final_text, parse_mode='Markdown')
+            
+        except asyncio.CancelledError:
+            # Tarefa foi cancelada
+            raise
+        except Exception as e:
+            error_text = f"❌ Erro durante download da playlist: {e}"
+            try:
+                await progress_msg.edit_text(error_text)
+            except:
+                pass
             
             # Relatório final
             final_text = f"🎵 **{playlist_name}** - Concluído!\n\n"
@@ -692,6 +1255,7 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
         application.add_handler(CommandHandler("spotify", self.spotify_command))
         application.add_handler(CommandHandler("history", self.history_command))
         application.add_handler(CommandHandler("clear_history", self.clear_history_command))
+        application.add_handler(CommandHandler("tasks", self.tasks_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback_query))
         
