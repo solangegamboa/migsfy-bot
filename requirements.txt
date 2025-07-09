@@ -1,5 +1,5 @@
 # Core dependencies
-slskd-api>=1.0.0
+slskd-api>=0.1.5
 python-dotenv>=1.0.0
 spotipy>=2.22.0
 
