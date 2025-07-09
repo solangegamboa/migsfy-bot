@@ -188,9 +188,25 @@ make telegram-bot
 # /search <termo> - Buscar música
 # /spotify <url> - Baixar playlist
 # /history - Ver histórico
+# /info - Informações do chat (IDs para configuração)
 # Exemplo: /search Artista - Música
 # Exemplo: /spotify https://open.spotify.com/playlist/ID
 ```
+
+### 🏢 Configuração para Grupos e Threads:
+O bot pode ser configurado para funcionar apenas em threads específicas de grupos:
+
+```env
+# Grupos permitidos
+TELEGRAM_ALLOWED_GROUPS=-1001234567890,-1009876543210
+
+# Threads específicas (formato: grupo_id:thread_id)
+TELEGRAM_ALLOWED_THREADS=-1001234567890:123,-1001234567890:456
+```
+
+**Use o comando `/info` para descobrir IDs automaticamente!**
+
+Veja [README-Telegram-Groups.md](README-Telegram-Groups.md) para configuração detalhada.
 
 ## ⚙️ Configurações
 
@@ -206,6 +222,8 @@ make telegram-bot
 | `SPOTIFY_REDIRECT_URI` | URI de redirecionamento | http://localhost:8888/callback |
 | `TELEGRAM_BOT_TOKEN` | Token do bot do Telegram | - |
 | `TELEGRAM_ALLOWED_USERS` | IDs dos usuários autorizados | - |
+| `TELEGRAM_ALLOWED_GROUPS` | IDs dos grupos autorizados | - |
+| `TELEGRAM_ALLOWED_THREADS` | Threads específicas (grupo:thread) | - |
 | `MAX_SEARCH_VARIATIONS` | Máximo de variações de busca | 8 |
 | `MIN_MP3_SCORE` | Score mínimo para MP3 | 15 |
 | `SEARCH_WAIT_TIME` | Tempo limite de busca (s) | 25 |

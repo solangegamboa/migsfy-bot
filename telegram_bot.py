@@ -60,14 +60,23 @@ except ImportError:
 # Configuração de logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('telegram_bot.log', encoding='utf-8')
+    ]
 )
 logger = logging.getLogger(__name__)
+
+# Reduz logs verbosos do httpx
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 class TelegramMusicBot:
     def __init__(self):
         self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
         self.allowed_users = self._get_allowed_users()
+        self.allowed_groups = self._get_allowed_groups()
+        self.allowed_threads = self._get_allowed_threads()
         self.slskd = None
         self.spotify_client = None
         self.spotify_user_client = None
@@ -84,6 +93,35 @@ class TelegramMusicBot:
         if users_str:
             return [int(user_id.strip()) for user_id in users_str.split(',') if user_id.strip()]
         return []
+    
+    def _get_allowed_groups(self):
+        """Obtém lista de grupos autorizados"""
+        groups_str = os.getenv('TELEGRAM_ALLOWED_GROUPS', '')
+        if groups_str:
+            return [int(group_id.strip()) for group_id in groups_str.split(',') if group_id.strip()]
+        return []
+    
+    def _get_allowed_threads(self):
+        """Obtém dicionário de threads permitidas por grupo"""
+        threads_str = os.getenv('TELEGRAM_ALLOWED_THREADS', '')
+        threads_dict = {}
+        
+        if threads_str:
+            # Formato: group_id:thread_id,group_id:thread_id
+            for thread_config in threads_str.split(','):
+                if ':' in thread_config:
+                    try:
+                        group_id, thread_id = thread_config.strip().split(':', 1)
+                        group_id = int(group_id)
+                        thread_id = int(thread_id)
+                        
+                        if group_id not in threads_dict:
+                            threads_dict[group_id] = []
+                        threads_dict[group_id].append(thread_id)
+                    except ValueError:
+                        logger.warning(f"Formato inválido para thread: {thread_config}")
+        
+        return threads_dict
     
     def _connect_services(self):
         """Conecta aos serviços externos"""
@@ -103,18 +141,64 @@ class TelegramMusicBot:
         except Exception as e:
             logger.error(f"❌ Erro ao configurar Spotify: {e}")
     
-    def _is_authorized(self, user_id: int) -> bool:
-        """Verifica se usuário está autorizado"""
-        if not self.allowed_users:
-            return True  # Se não há lista, permite todos
-        return user_id in self.allowed_users
+    def _is_authorized(self, update: Update) -> bool:
+        """Verifica se usuário/grupo/thread está autorizado"""
+        user_id = update.effective_user.id
+        chat = update.effective_chat
+        
+        # Log para debug
+        logger.info(f"Verificando autorização - User: {user_id}, Chat: {chat.id}, Type: {chat.type}")
+        
+        # Se é chat privado, verifica usuários permitidos
+        if chat.type == 'private':
+            if not self.allowed_users:
+                return True  # Se não há lista, permite todos em privado
+            return user_id in self.allowed_users
+        
+        # Se é grupo/supergrupo
+        elif chat.type in ['group', 'supergroup']:
+            # Verifica se o grupo está na lista de grupos permitidos
+            if self.allowed_groups and chat.id not in self.allowed_groups:
+                logger.info(f"Grupo {chat.id} não está na lista de grupos permitidos")
+                return False
+            
+            # Se há configuração de threads específicas para este grupo
+            if chat.id in self.allowed_threads:
+                message_thread_id = getattr(update.message, 'message_thread_id', None)
+                
+                # Log para debug
+                logger.info(f"Thread ID da mensagem: {message_thread_id}")
+                logger.info(f"Threads permitidas para grupo {chat.id}: {self.allowed_threads[chat.id]}")
+                
+                # Se a mensagem não tem thread_id (mensagem no grupo principal)
+                if message_thread_id is None:
+                    logger.info("Mensagem no grupo principal - negando acesso")
+                    return False
+                
+                # Verifica se a thread está permitida
+                if message_thread_id not in self.allowed_threads[chat.id]:
+                    logger.info(f"Thread {message_thread_id} não está permitida")
+                    return False
+                
+                logger.info(f"Thread {message_thread_id} está permitida")
+                return True
+            
+            # Se não há configuração específica de threads, permite o grupo todo
+            elif self.allowed_groups and chat.id in self.allowed_groups:
+                return True
+            
+            # Se não há configuração de grupos, nega acesso
+            logger.info("Grupo não configurado - negando acesso")
+            return False
+        
+        # Outros tipos de chat não são suportados
+        logger.info(f"Tipo de chat não suportado: {chat.type}")
+        return False
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /start"""
-        user_id = update.effective_user.id
-        
-        if not self._is_authorized(user_id):
-            await update.message.reply_text("❌ Você não tem permissão para usar este bot.")
+        if not self._is_authorized(update):
+            await update.message.reply_text("❌ Você não tem permissão para usar este bot neste local.")
             return
         
         welcome_text = """
@@ -140,7 +224,7 @@ Bem-vindo! Este bot permite buscar e baixar músicas usando slskd e Spotify.
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /help"""
-        if not self._is_authorized(update.effective_user.id):
+        if not self._is_authorized(update):
             return
         
         help_text = """
@@ -161,6 +245,7 @@ Exemplo: `/search Linkin Park - In the End`
 
 **Sistema:**
 `/status` - Status dos serviços
+`/info` - Informações do chat atual
 `/help` - Esta ajuda
 
 **Exemplos completos:**
@@ -173,7 +258,7 @@ Exemplo: `/search Linkin Park - In the End`
     
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /status"""
-        if not self._is_authorized(update.effective_user.id):
+        if not self._is_authorized(update):
             return
         
         status_text = "🔍 **Status dos Serviços**\n\n"
@@ -197,7 +282,7 @@ Exemplo: `/search Linkin Park - In the End`
     
     async def search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /search"""
-        if not self._is_authorized(update.effective_user.id):
+        if not self._is_authorized(update):
             return
         
         if not context.args:
@@ -209,7 +294,7 @@ Exemplo: `/search Linkin Park - In the End`
     
     async def spotify_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /spotify"""
-        if not self._is_authorized(update.effective_user.id):
+        if not self._is_authorized(update):
             return
         
         if not context.args:
@@ -229,7 +314,7 @@ Exemplo: `/search Linkin Park - In the End`
     
     async def history_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /history"""
-        if not self._is_authorized(update.effective_user.id):
+        if not self._is_authorized(update):
             return
         
         try:
@@ -257,7 +342,7 @@ Exemplo: `/search Linkin Park - In the End`
     
     async def clear_history_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /clear_history"""
-        if not self._is_authorized(update.effective_user.id):
+        if not self._is_authorized(update):
             return
         
         # Botões de confirmação
@@ -274,12 +359,76 @@ Exemplo: `/search Linkin Park - In the End`
             reply_markup=reply_markup
         )
     
+    async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Comando /info - mostra informações do chat atual"""
+        chat = update.effective_chat
+        user = update.effective_user
+        message = update.message
+        
+        info_text = "📋 **Informações do Chat**\n\n"
+        info_text += f"👤 **Usuário:**\n"
+        info_text += f"• ID: `{user.id}`\n"
+        info_text += f"• Nome: {user.first_name}"
+        if user.last_name:
+            info_text += f" {user.last_name}"
+        if user.username:
+            info_text += f" (@{user.username})"
+        info_text += "\n\n"
+        
+        info_text += f"💬 **Chat:**\n"
+        info_text += f"• ID: `{chat.id}`\n"
+        info_text += f"• Tipo: {chat.type}\n"
+        if chat.title:
+            info_text += f"• Título: {chat.title}\n"
+        
+        # Informações de thread (se aplicável)
+        thread_id = getattr(message, 'message_thread_id', None)
+        if thread_id:
+            info_text += f"• Thread ID: `{thread_id}`\n"
+            info_text += f"• Configuração para .env: `{chat.id}:{thread_id}`\n"
+        else:
+            info_text += f"• Thread: Mensagem no grupo principal\n"
+        
+        info_text += "\n🔧 **Para configurar acesso:**\n"
+        
+        if chat.type == 'private':
+            info_text += f"Adicione ao .env:\n`TELEGRAM_ALLOWED_USERS={user.id}`"
+        elif chat.type in ['group', 'supergroup']:
+            info_text += f"Para permitir todo o grupo:\n`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n\n"
+            if thread_id:
+                info_text += f"Para permitir apenas esta thread:\n"
+                info_text += f"`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n"
+                info_text += f"`TELEGRAM_ALLOWED_THREADS={chat.id}:{thread_id}`"
+            else:
+                info_text += f"Para permitir apenas uma thread específica:\n"
+                info_text += f"`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n"
+                info_text += f"`TELEGRAM_ALLOWED_THREADS={chat.id}:THREAD_ID`\n"
+                info_text += f"(substitua THREAD_ID pelo ID da thread desejada)"
+        
+        await update.message.reply_text(info_text, parse_mode='Markdown')
+        
+        if chat.type == 'private':
+            info_text += f"Adicione ao .env:\n`TELEGRAM_ALLOWED_USERS={user.id}`"
+        elif chat.type in ['group', 'supergroup']:
+            info_text += f"Para permitir todo o grupo:\n`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n\n"
+            if thread_id:
+                info_text += f"Para permitir apenas esta thread:\n"
+                info_text += f"`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n"
+                info_text += f"`TELEGRAM_ALLOWED_THREADS={chat.id}:{thread_id}`"
+            else:
+                info_text += f"Para permitir apenas uma thread específica:\n"
+                info_text += f"`TELEGRAM_ALLOWED_GROUPS={chat.id}`\n"
+                info_text += f"`TELEGRAM_ALLOWED_THREADS={chat.id}:THREAD_ID`\n"
+                info_text += f"(substitua THREAD_ID pelo ID da thread desejada)"
+        
+        await update.message.reply_text(info_text, parse_mode='Markdown')
+    
     async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Manipula botões inline"""
         query = update.callback_query
         await query.answer()
         
-        if not self._is_authorized(query.from_user.id):
+        if not self._is_authorized(update):
             return
         
         if query.data == "clear_history_yes":
@@ -468,6 +617,19 @@ Exemplo: `/search Linkin Park - In the End`
             except:
                 pass
     
+    async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Manipula erros do bot"""
+        logger.error(f"Erro no bot: {context.error}")
+        
+        # Se há um update, tenta responder ao usuário
+        if update and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "❌ Ocorreu um erro interno. Tente novamente em alguns segundos."
+                )
+            except Exception as e:
+                logger.error(f"Erro ao enviar mensagem de erro: {e}")
+    
     def run(self):
         """Inicia o bot"""
         if not TELEGRAM_AVAILABLE:
@@ -487,14 +649,28 @@ Exemplo: `/search Linkin Park - In the End`
         application.add_handler(CommandHandler("spotify", self.spotify_command))
         application.add_handler(CommandHandler("history", self.history_command))
         application.add_handler(CommandHandler("clear_history", self.clear_history_command))
+        application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback_query))
+        
+        # Adiciona handler de erro
+        application.add_error_handler(self.error_handler)
         
         # NÃO adiciona handler para mensagens de texto - elas serão ignoradas
         
-        # Inicia o bot
+        # Inicia o bot com configurações robustas
         logger.info("✅ Bot iniciado! Pressione Ctrl+C para parar.")
         logger.info("🔇 Mensagens que não sejam comandos serão ignoradas")
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
+        
+        try:
+            application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True,
+                poll_interval=1.0,
+                timeout=10
+            )
+        except Exception as e:
+            logger.error(f"Erro durante polling: {e}")
+            raise
 
 
 def main():
