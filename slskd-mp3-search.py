@@ -25,7 +25,7 @@ except ImportError:
 
 try:
     import spotipy
-    from spotipy.oauth2 import SpotifyClientCredentials
+    from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
     SPOTIPY_AVAILABLE = True
     print("✅ spotipy disponível para integração com Spotify")
 except ImportError:
@@ -241,6 +241,47 @@ def setup_spotify_client():
         return None
 
 
+def setup_spotify_user_client():
+    """Configura cliente Spotify com autenticação de usuário (para modificar playlists)"""
+    if not SPOTIPY_AVAILABLE:
+        print("❌ Spotipy não está disponível")
+        return None
+    
+    client_id = os.getenv('SPOTIFY_CLIENT_ID')
+    client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+    redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI', 'http://localhost:8888/callback')
+    
+    if not client_id or not client_secret:
+        print("❌ Credenciais do Spotify não encontradas no .env")
+        print("💡 Configure SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET")
+        print("💡 Obtenha em: https://developer.spotify.com/dashboard/")
+        return None
+    
+    try:
+        # Scopes necessários para modificar playlists
+        scope = "playlist-modify-public playlist-modify-private"
+        
+        auth_manager = SpotifyOAuth(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            scope=scope,
+            cache_path=".spotify_cache"
+        )
+        
+        sp = spotipy.Spotify(auth_manager=auth_manager)
+        
+        # Testa a conexão obtendo perfil do usuário
+        user_profile = sp.current_user()
+        print(f"✅ Cliente Spotify autenticado como: {user_profile['display_name']}")
+        return sp
+        
+    except Exception as e:
+        print(f"❌ Erro ao configurar autenticação Spotify: {e}")
+        print("💡 Certifique-se de que o redirect_uri está configurado no app Spotify")
+        return None
+
+
 def extract_playlist_id(playlist_url):
     """Extrai ID da playlist de uma URL do Spotify"""
     # Padrões de URL do Spotify
@@ -298,6 +339,69 @@ def get_playlist_tracks(sp, playlist_id):
                         'duration_ms': track['duration_ms'],
                         'popularity': track['popularity'],
                         'spotify_url': track['external_urls']['spotify']
+                    }
+                    
+                    tracks.append(track_info)
+            
+            # Próxima página
+            results = sp.next(results) if results['next'] else None
+        
+        print(f"✅ Encontradas {len(tracks)} faixas na playlist")
+        return tracks, playlist_name
+        
+    except Exception as e:
+        print(f"❌ Erro ao obter faixas da playlist: {e}")
+        return [], ""
+
+
+def remove_track_from_playlist(sp_user, playlist_id, track_uri):
+    """Remove uma faixa específica da playlist do Spotify"""
+    try:
+        # Remove a faixa da playlist
+        sp_user.playlist_remove_all_occurrences_of_items(playlist_id, [track_uri])
+        return True
+    except Exception as e:
+        print(f"❌ Erro ao remover faixa da playlist: {e}")
+        return False
+
+
+def get_playlist_tracks_with_uris(sp, playlist_id):
+    """Obtém todas as faixas de uma playlist com URIs para remoção"""
+    try:
+        print(f"🎵 Buscando faixas da playlist...")
+        
+        # Obtém informações da playlist
+        playlist_info = sp.playlist(playlist_id, fields='name,description,owner,tracks')
+        playlist_name = playlist_info['name']
+        owner_name = playlist_info['owner']['display_name']
+        
+        print(f"📋 Playlist: '{playlist_name}' por {owner_name}")
+        
+        tracks = []
+        results = sp.playlist_tracks(playlist_id)
+        
+        while results:
+            for item in results['items']:
+                track = item.get('track')
+                if track and track.get('type') == 'track':
+                    # Extrai informações da faixa
+                    track_name = track['name']
+                    artists = [artist['name'] for artist in track['artists']]
+                    artist_str = ', '.join(artists)
+                    
+                    # Formato: "Artista - Música"
+                    search_term = f"{artist_str} - {track_name}"
+                    
+                    track_info = {
+                        'search_term': search_term,
+                        'track_name': track_name,
+                        'artists': artists,
+                        'artist_str': artist_str,
+                        'album': track['album']['name'],
+                        'duration_ms': track['duration_ms'],
+                        'popularity': track['popularity'],
+                        'spotify_url': track['external_urls']['spotify'],
+                        'uri': track['uri']  # URI necessário para remoção
                     }
                     
                     tracks.append(track_info)
@@ -394,6 +498,90 @@ def show_playlist_preview(tracks, limit=10):
     
     if len(tracks) > limit:
         print(f"     ... e mais {len(tracks) - limit} faixas")
+
+
+def download_playlist_tracks_with_removal(slskd, sp_user, playlist_id, tracks, playlist_name, max_tracks=None, skip_duplicates=True):
+    """Baixa faixas de uma playlist e remove as encontradas da playlist do Spotify"""
+    if not tracks:
+        print("❌ Nenhuma faixa para baixar")
+        return
+    
+    total_tracks = len(tracks)
+    if max_tracks:
+        tracks = tracks[:max_tracks]
+        print(f"🎯 Limitando a {max_tracks} faixas (de {total_tracks} total)")
+    
+    print(f"\n🎵 Iniciando download de {len(tracks)} faixas da playlist '{playlist_name}'")
+    print("🗑️ Faixas encontradas serão removidas da playlist automaticamente")
+    print("=" * 70)
+    
+    successful_downloads = 0
+    skipped_duplicates = 0
+    failed_downloads = 0
+    removed_from_playlist = 0
+    
+    for i, track in enumerate(tracks, 1):
+        search_term = track['search_term']
+        track_uri = track['uri']
+        
+        print(f"\n📍 [{i}/{len(tracks)}] {search_term}")
+        print(f"   💿 Álbum: {track['album']}")
+        print(f"   ⏱️ Duração: {track['duration_ms'] // 1000 // 60}:{(track['duration_ms'] // 1000) % 60:02d}")
+        
+        # Verifica duplicatas se habilitado
+        if skip_duplicates and is_duplicate_download(search_term):
+            print(f"   ⏭️ Pulando - já baixada anteriormente")
+            skipped_duplicates += 1
+            
+            # Remove da playlist mesmo se já foi baixada antes
+            if sp_user and remove_track_from_playlist(sp_user, playlist_id, track_uri):
+                print(f"   🗑️ Removida da playlist (já baixada anteriormente)")
+                removed_from_playlist += 1
+            
+            continue
+        
+        # Tenta fazer o download
+        try:
+            success = smart_mp3_search(slskd, search_term)
+            if success:
+                successful_downloads += 1
+                print(f"   ✅ Download iniciado com sucesso")
+                
+                # Remove da playlist se download foi bem-sucedido
+                if sp_user and remove_track_from_playlist(sp_user, playlist_id, track_uri):
+                    print(f"   🗑️ Removida da playlist do Spotify")
+                    removed_from_playlist += 1
+                else:
+                    print(f"   ⚠️ Falha ao remover da playlist")
+                    
+            else:
+                failed_downloads += 1
+                print(f"   ❌ Falha no download - mantendo na playlist")
+                
+        except Exception as e:
+            failed_downloads += 1
+            print(f"   ❌ Erro: {e}")
+        
+        # Pausa entre downloads para evitar sobrecarga
+        if i < len(tracks):
+            print(f"   ⏸️ Pausa de 2s...")
+            time.sleep(2)
+    
+    # Relatório final
+    print(f"\n{'='*70}")
+    print(f"📊 RELATÓRIO FINAL - Playlist: '{playlist_name}'")
+    print(f"✅ Downloads bem-sucedidos: {successful_downloads}")
+    print(f"⏭️ Duplicatas puladas: {skipped_duplicates}")
+    print(f"❌ Falhas: {failed_downloads}")
+    print(f"🗑️ Removidas da playlist: {removed_from_playlist}")
+    print(f"📊 Total processado: {len(tracks)}")
+    
+    if successful_downloads > 0:
+        print(f"\n💡 {successful_downloads} downloads foram iniciados!")
+        print(f"💡 Monitore o progresso no slskd web interface")
+    
+    if removed_from_playlist > 0:
+        print(f"🎵 {removed_from_playlist} faixas foram removidas da playlist do Spotify")
 
 
 # ==================== FIM DO SISTEMA SPOTIFY ====================
@@ -1144,7 +1332,8 @@ def main():
     print("   --playlist URL --limit N : Limita download a N músicas")
     print("   --playlist URL --no-skip : Baixa mesmo duplicatas")
     print("   --playlist URL --auto    : Baixa sem confirmação")
-    print("   --playlist URL --auto --limit N --no-skip : Combina opções")
+    print("   --playlist URL --remove-from-playlist : Remove da playlist após download")
+    print("   --playlist URL --auto --limit N --no-skip --remove-from-playlist : Combina opções")
     print()
     
     # Verifica comandos especiais
@@ -1194,6 +1383,7 @@ def main():
             max_tracks = None
             skip_duplicates = True
             auto_confirm = False
+            remove_from_playlist = False
             
             for i, arg in enumerate(sys.argv[3:], 3):
                 if arg == '--limit' and i + 1 < len(sys.argv):
@@ -1206,11 +1396,23 @@ def main():
                     skip_duplicates = False
                 elif arg == '--auto' or arg == '--yes' or arg == '-y':
                     auto_confirm = True
+                elif arg == '--remove-from-playlist':
+                    remove_from_playlist = True
             
-            # Configura Spotify
+            # Configura Spotify (cliente básico para leitura)
             sp = setup_spotify_client()
             if not sp:
                 return
+            
+            # Se vai remover da playlist, precisa de autenticação de usuário
+            sp_user = None
+            if remove_from_playlist:
+                print("🔐 Configurando autenticação para modificar playlist...")
+                sp_user = setup_spotify_user_client()
+                if not sp_user:
+                    print("❌ Não foi possível autenticar para modificar playlist")
+                    print("💡 Continuando sem remoção automática da playlist")
+                    remove_from_playlist = False
             
             # Configura slskd
             slskd = connectToSlskd()
@@ -1224,8 +1426,12 @@ def main():
                 print("💡 Use: https://open.spotify.com/playlist/ID ou spotify:playlist:ID")
                 return
             
-            # Obtém faixas da playlist
-            tracks, playlist_name = get_playlist_tracks(sp, playlist_id)
+            # Obtém faixas da playlist (com URIs se vai remover)
+            if remove_from_playlist:
+                tracks, playlist_name = get_playlist_tracks_with_uris(sp, playlist_id)
+            else:
+                tracks, playlist_name = get_playlist_tracks(sp, playlist_id)
+                
             if not tracks:
                 return
             
@@ -1239,6 +1445,8 @@ def main():
                     print(f"   (limitado a {max_tracks} faixas)")
                 if not skip_duplicates:
                     print(f"   (incluindo duplicatas)")
+                if remove_from_playlist:
+                    print(f"   🗑️ (faixas encontradas serão removidas da playlist)")
                 
                 confirm = input("Digite 'sim' para continuar: ").lower().strip()
                 if confirm not in ['sim', 's', 'yes', 'y']:
@@ -1250,9 +1458,14 @@ def main():
                     print(f"   (limitado a {max_tracks} faixas)")
                 if not skip_duplicates:
                     print(f"   (incluindo duplicatas)")
+                if remove_from_playlist:
+                    print(f"   🗑️ (faixas encontradas serão removidas da playlist)")
             
-            # Inicia downloads
-            download_playlist_tracks(slskd, tracks, playlist_name, max_tracks, skip_duplicates)
+            # Inicia downloads (com ou sem remoção da playlist)
+            if remove_from_playlist:
+                download_playlist_tracks_with_removal(slskd, sp_user, playlist_id, tracks, playlist_name, max_tracks, skip_duplicates)
+            else:
+                download_playlist_tracks(slskd, tracks, playlist_name, max_tracks, skip_duplicates)
             return
         
         # Comando para forçar download

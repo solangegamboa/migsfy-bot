@@ -13,6 +13,7 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
 - **🆕 Histórico de downloads**: Evita downloads duplicados automaticamente
 - **🆕 Gerenciamento de histórico**: Comandos para visualizar, limpar e forçar downloads
 - **🎵 Integração Spotify**: Baixa playlists completas do Spotify automaticamente
+- **🗑️ Remoção automática**: Remove músicas da playlist após encontrá-las para download
 
 ## 📋 Pré-requisitos
 
@@ -55,6 +56,7 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
 5. **🆕 Configurar Spotify (opcional)**:
    - Acesse [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/)
    - Crie um novo app
+   - Configure Redirect URI: `http://localhost:8888/callback`
    - Copie Client ID e Client Secret para o .env
 
 ## 🎵 Uso
@@ -103,8 +105,11 @@ python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --limit 10
 # Baixar incluindo duplicatas (não pula músicas já baixadas)
 python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --no-skip
 
+# Remover músicas da playlist após encontrá-las
+python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --remove-from-playlist
+
 # Combinar opções
-python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --limit 5 --no-skip --auto
+python3 slskd-mp3-search.py --playlist "URL_DA_PLAYLIST" --limit 5 --no-skip --auto --remove-from-playlist
 ```
 
 ### Formatos de URL Spotify aceitos:
@@ -139,6 +144,7 @@ python3 slskd-mp3-search.py
 | `SLSKD_URL_BASE` | URL base do slskd | http://host:5030 |
 | `SPOTIFY_CLIENT_ID` | Client ID do Spotify | - |
 | `SPOTIFY_CLIENT_SECRET` | Client Secret do Spotify | - |
+| `SPOTIFY_REDIRECT_URI` | URI de redirecionamento | http://localhost:8888/callback |
 | `MAX_SEARCH_VARIATIONS` | Máximo de variações de busca | 8 |
 | `MIN_MP3_SCORE` | Score mínimo para MP3 | 15 |
 | `SEARCH_WAIT_TIME` | Tempo limite de busca (s) | 25 |
@@ -295,6 +301,9 @@ python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --limit 10 --auto
 
 # Download completo incluindo duplicatas, sem confirmação
 python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --no-skip --auto
+
+# Download com remoção automática da playlist
+python3 slskd-mp3-search.py --playlist "URL_PLAYLIST" --auto --remove-from-playlist
 ```
 
 ## 📝 Licença
