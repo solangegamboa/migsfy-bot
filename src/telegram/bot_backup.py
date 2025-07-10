@@ -24,12 +24,7 @@ except ImportError:
 
 # Importa funções do script principal
 try:
-    # Tenta importar do módulo CLI
-    import sys
-    import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cli'))
-    
-    from main import (
+    from slskd_mp3_search import (
         connectToSlskd, 
         smart_mp3_search,
         smart_album_search,
@@ -43,39 +38,16 @@ try:
         clear_download_history
     )
 except ImportError:
-    # Fallback para importação direta do arquivo
-    try:
-        from slskd_mp3_search import (
-            connectToSlskd, 
-            smart_mp3_search,
-            smart_album_search,
-            setup_spotify_client, 
-            setup_spotify_user_client,
-            extract_playlist_id, 
-            get_playlist_tracks_with_uris,
-            download_playlist_tracks_with_removal,
-            download_playlist_tracks,
-            show_download_history,
-            clear_download_history
-        )
-    except ImportError:
-        # Se não conseguir importar como módulo, importa como script
-        import sys
-        import importlib.util
-        
-        # Tenta o novo caminho primeiro
-        main_path = os.path.join(os.path.dirname(__file__), '..', 'cli', 'main.py')
-        if os.path.exists(main_path):
-            spec = importlib.util.spec_from_file_location("main", main_path)
-        else:
-            # Fallback para o caminho antigo
-            spec = importlib.util.spec_from_file_location("slskd_mp3_search", "slskd-mp3-search.py")
-        
-        slskd_module = importlib.util.module_from_spec(spec)
-        sys.modules["slskd_mp3_search"] = slskd_module
-        spec.loader.exec_module(slskd_module)
-        
-        # Importa as funções necessárias
+    # Se não conseguir importar como módulo, importa como script
+    import sys
+    import importlib.util
+    
+    spec = importlib.util.spec_from_file_location("slskd_mp3_search", "slskd-mp3-search.py")
+    slskd_module = importlib.util.module_from_spec(spec)
+    sys.modules["slskd_mp3_search"] = slskd_module
+    spec.loader.exec_module(slskd_module)
+    
+    # Importa as funções necessárias
     connectToSlskd = slskd_module.connectToSlskd
     smart_mp3_search = slskd_module.smart_mp3_search
     smart_album_search = slskd_module.smart_album_search
@@ -588,13 +560,6 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
             # Processa seleção de álbum
             await self._handle_album_selection(query)
         
-        elif query.data == "music_cancel":
-            await query.edit_message_text("❌ Seleção de música cancelada")
-        
-        elif query.data.startswith("music_"):
-            # Processa seleção de música
-            await self._handle_music_selection(query)
-        
         elif query.data.startswith("cancel_"):
             # Extrai o task_id do callback data
             task_id = query.data[7:]  # Remove "cancel_" prefix
@@ -719,10 +684,7 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
     
     def _download_album_tracks(self, album_info: dict, search_term: str) -> dict:
         """Baixa todas as faixas de um álbum"""
-        try:
-            from main import download_mp3
-        except ImportError:
-            from slskd_mp3_search import download_mp3
+        from slskd_mp3_search import download_mp3
         import time
         import os
         
@@ -772,148 +734,8 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
                 'failed': failed_downloads
             }
     
-    async def _handle_music_selection(self, query):
-        """Manipula seleção de música pelo usuário"""
-        try:
-            # Parse do callback data: music_{index}_{query_hash}
-            parts = query.data.split('_')
-            if len(parts) != 3:
-                await query.edit_message_text("❌ Dados inválidos")
-                return
-            
-            music_index = int(parts[1])
-            query_hash = int(parts[2])
-            
-            # Recupera candidatos do cache
-            if not hasattr(self, '_music_candidates_cache') or query_hash not in self._music_candidates_cache:
-                await query.edit_message_text("❌ Dados expirados. Faça uma nova busca.")
-                return
-            
-            cache_data = self._music_candidates_cache[query_hash]
-            candidates = cache_data['candidates']
-            original_query = cache_data['original_query']
-            
-            if music_index >= len(candidates):
-                await query.edit_message_text("❌ Música inválida")
-                return
-            
-            selected_music = candidates[music_index]
-            
-            # Inicia download da música selecionada
-            await self._start_music_download(query, selected_music, original_query)
-            
-            # Remove do cache após uso
-            del self._music_candidates_cache[query_hash]
-            
-        except (ValueError, IndexError) as e:
-            await query.edit_message_text(f"❌ Erro ao processar seleção: {e}")
-        except Exception as e:
-            await query.edit_message_text(f"❌ Erro inesperado: {e}")
-    
-    async def _start_music_download(self, query, music_info: dict, original_query: str):
-        """Inicia o download da música selecionada"""
-        import os
-        
-        user_id = query.from_user.id
-        chat_id = query.message.chat_id
-        
-        filename = os.path.basename(music_info['filename'])
-        clean_filename = self._escape_markdown(filename)
-        clean_username = self._escape_markdown(music_info['username'])
-        
-        # Cria tarefa para o download
-        task = asyncio.create_task(self._execute_music_download(music_info, original_query))
-        task_id = self._register_task(task, f"Download de Música", user_id, chat_id)
-        
-        # Atualiza mensagem com informações do download (sem formatação markdown)
-        cancel_keyboard = self._create_cancel_keyboard(task_id)
-        
-        download_text = f"🎵 Baixando Música Selecionada\n\n"
-        download_text += f"🎶 {clean_filename}\n"
-        download_text += f"👤 Usuário: {clean_username}\n"
-        download_text += f"🎧 Bitrate: {music_info['bitrate']} kbps\n"
-        download_text += f"💾 Tamanho: {music_info['size'] / 1024 / 1024:.1f} MB\n"
-        download_text += f"⏱️ Duração: {music_info.get('duration', 'N/A')}\n\n"
-        download_text += f"⏳ Iniciando download...\n"
-        download_text += f"💡 Use o botão abaixo para cancelar se necessário"
-        
-        try:
-            await query.edit_message_text(download_text, reply_markup=cancel_keyboard)
-        except Exception as e:
-            logger.error(f"Erro ao atualizar mensagem de download: {e}")
-            # Fallback simples
-            await query.edit_message_text(f"🎵 Baixando: {clean_filename}", reply_markup=cancel_keyboard)
-        
-        try:
-            # Aguarda conclusão do download
-            result = await task
-            
-            if result['success']:
-                final_text = f"✅ Música baixada com sucesso!\n\n"
-                final_text += f"🎶 {clean_filename}\n"
-                final_text += f"💡 Monitore o progresso na interface web do slskd"
-                
-                await query.edit_message_text(final_text)
-            else:
-                error_msg = f"❌ Falha no download da música: {result.get('error', 'Erro desconhecido')}"
-                await query.edit_message_text(error_msg)
-                
-        except asyncio.CancelledError:
-            cancel_msg = f"🛑 Download da música cancelado: {clean_filename}"
-            await query.edit_message_text(cancel_msg)
-        except Exception as e:
-            error_msg = f"❌ Erro durante download: {str(e)}"
-            await query.edit_message_text(error_msg)
-        finally:
-            self._unregister_task(task_id)
-    
-    async def _execute_music_download(self, music_info: dict, search_term: str) -> dict:
-        """Executa o download da música de forma assíncrona"""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._download_music_track, music_info, search_term)
-    
-    def _download_music_track(self, music_info: dict, search_term: str) -> dict:
-        """Baixa uma música individual"""
-        try:
-            from main import download_mp3
-        except ImportError:
-            from slskd_mp3_search import download_mp3
-        import os
-        
-        username = music_info['username']
-        filename = music_info['filename']
-        file_size = music_info['size']
-        
-        print(f"\n📥 Iniciando download da música...")
-        print(f"🎵 {os.path.basename(filename)}")
-        print(f"💾 Tamanho: {file_size / 1024 / 1024:.2f} MB")
-        print(f"🎧 Bitrate: {music_info['bitrate']} kbps")
-        
-        try:
-            # Tenta fazer o download
-            success = download_mp3(self.slskd, username, filename, file_size, search_term)
-            
-            if success:
-                print(f"✅ Download iniciado com sucesso")
-                return {
-                    'success': True
-                }
-            else:
-                print(f"❌ Falha no download")
-                return {
-                    'success': False,
-                    'error': 'Falha ao iniciar download'
-                }
-            
-        except Exception as e:
-            print(f"❌ Erro durante download da música: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
-    
     async def _handle_music_search(self, update: Update, search_term: str):
-        """Manipula busca de música com seleção de candidatos"""
+        """Manipula busca de música"""
         if not self.slskd:
             await update.message.reply_text("❌ SLSKD não está conectado")
             return
@@ -921,161 +743,38 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
         
-        # Cria tarefa para a busca de música
-        task = asyncio.create_task(self._execute_music_search_candidates(search_term))
+        # Cria tarefa para a busca
+        task = asyncio.create_task(self._execute_music_search(search_term))
         task_id = self._register_task(task, "Busca de Música", user_id, chat_id)
         
         # Mensagem de progresso com botão de cancelar
         cancel_keyboard = self._create_cancel_keyboard(task_id)
         progress_msg = await update.message.reply_text(
-            f"🎵 Buscando música: {search_term}\n💡 Use o botão abaixo para cancelar se necessário",
+            f"🔍 Buscando: {search_term}\n💡 Use o botão abaixo para cancelar se necessário",
             reply_markup=cancel_keyboard
         )
         
         try:
             # Aguarda resultado da busca
-            music_candidates = await task
+            success = await task
             
-            if music_candidates:
-                # Mostra os 5 melhores candidatos com botões
-                await self._show_music_candidates(progress_msg, music_candidates, search_term)
+            if success:
+                await progress_msg.edit_text(f"✅ Busca concluída: {search_term}\n💡 Download em andamento no slskd")
             else:
-                await progress_msg.edit_text(f"❌ Nenhuma música encontrada para: {search_term}\n💡 Tente:\n• Verificar a grafia\n• Usar formato 'Artista - Música'\n• Buscar por álbum completo com /album")
+                await progress_msg.edit_text(f"❌ Nenhum resultado encontrado para: {search_term}")
                 
         except asyncio.CancelledError:
-            await progress_msg.edit_text(f"🛑 Busca de música cancelada: {search_term}")
+            await progress_msg.edit_text(f"🛑 Busca cancelada: {search_term}")
         except Exception as e:
-            await progress_msg.edit_text(f"❌ Erro na busca de música: {e}")
+            await progress_msg.edit_text(f"❌ Erro na busca: {e}")
         finally:
             # Remove tarefa do registro
             self._unregister_task(task_id)
     
-    async def _execute_music_search_candidates(self, search_term: str) -> list:
-        """Executa a busca de música e retorna candidatos sem fazer download"""
+    async def _execute_music_search(self, search_term: str) -> bool:
+        """Executa a busca de música de forma assíncrona"""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._search_music_candidates, search_term)
-    
-    def _search_music_candidates(self, search_term: str) -> list:
-        """Busca candidatos de música sem fazer download automático"""
-        try:
-            from main import (
-                is_duplicate_download, create_search_variations, 
-                wait_for_search_completion
-            )
-        except ImportError:
-            from slskd_mp3_search import (
-                is_duplicate_download, create_search_variations, 
-                wait_for_search_completion
-            )
-        import os
-        
-        print(f"🎵 Busca inteligente por MÚSICA: '{search_term}'")
-        
-        # Verifica se já foi baixado anteriormente
-        if is_duplicate_download(search_term):
-            print(f"⏭️ Pulando busca - música já baixada anteriormente")
-            return []
-        
-        variations = create_search_variations(search_term)
-        print(f"📝 {len(variations)} variações criadas para música")
-        
-        all_candidates = []
-        
-        for i, search_variation in enumerate(variations, 1):
-            print(f"\n📍 Tentativa {i}/{len(variations)}: '{search_variation}'")
-            
-            try:
-                print(f"🔍 Buscando música: '{search_variation}'")
-                
-                search_result = self.slskd.searches.search_text(search_variation)
-                search_id = search_result.get('id')
-                
-                # Aguarda a busca finalizar
-                search_responses = wait_for_search_completion(self.slskd, search_id, max_wait=int(os.getenv('SEARCH_WAIT_TIME', 25)))
-                
-                if not search_responses:
-                    print("❌ Nenhuma resposta")
-                    continue
-                
-                # Conta total de arquivos encontrados
-                total_files = sum(len(response.get('files', [])) for response in search_responses)
-                print(f"📊 Total de arquivos encontrados: {total_files}")
-                
-                if total_files > 0:
-                    # Para músicas, procura por arquivos individuais de qualidade
-                    music_candidates = self._extract_music_candidates(search_responses, search_term)
-                    
-                    if music_candidates:
-                        print(f"🎵 Encontrados {len(music_candidates)} candidatos de música")
-                        all_candidates.extend(music_candidates)
-                        
-                        # Se encontrou bons candidatos, para a busca
-                        if len(all_candidates) >= 10:
-                            break
-            
-            except Exception as e:
-                print(f"❌ Erro na busca: {e}")
-        
-        # Remove duplicatas e ordena por qualidade
-        unique_candidates = {}
-        for candidate in all_candidates:
-            key = f"{candidate['username']}:{candidate['filename']}"
-            if key not in unique_candidates or candidate['bitrate'] > unique_candidates[key]['bitrate']:
-                unique_candidates[key] = candidate
-        
-        final_candidates = list(unique_candidates.values())
-        final_candidates.sort(key=lambda x: (x['bitrate'], x['size']), reverse=True)
-        
-        # Retorna os 5 melhores
-        return final_candidates[:5]
-    
-    def _extract_music_candidates(self, search_responses: list, search_term: str) -> list:
-        """Extrai candidatos de música dos resultados de busca"""
-        candidates = []
-        
-        for response in search_responses:
-            username = response.get('username', 'Unknown')
-            files = response.get('files', [])
-            
-            for file_info in files:
-                filename = file_info.get('filename', '')
-                
-                # Filtra apenas arquivos de música
-                if not filename.lower().endswith(('.mp3', '.flac', '.wav', '.m4a')):
-                    continue
-                
-                # Extrai informações do arquivo
-                size = file_info.get('size', 0)
-                bitrate = file_info.get('bitRate', 0)
-                duration = file_info.get('length', 0)
-                
-                # Converte duração para formato legível
-                if duration > 0:
-                    minutes = duration // 60
-                    seconds = duration % 60
-                    duration_str = f"{minutes}:{seconds:02d}"
-                else:
-                    duration_str = "N/A"
-                
-                # Filtra arquivos muito pequenos (provavelmente não são músicas completas)
-                if size < 1024 * 1024:  # Menor que 1MB
-                    continue
-                
-                # Filtra bitrates muito baixos
-                if bitrate > 0 and bitrate < 128:
-                    continue
-                
-                candidate = {
-                    'username': username,
-                    'filename': filename,
-                    'size': size,
-                    'bitrate': bitrate if bitrate > 0 else 320,  # Default se não informado
-                    'duration': duration_str
-                }
-                
-                candidates.append(candidate)
-        
-        return candidates
+        return await loop.run_in_executor(None, smart_mp3_search, self.slskd, search_term)
     
     async def _handle_album_search(self, update: Update, album_query: str):
         """Manipula busca de álbum com seleção de candidatos"""
@@ -1122,18 +821,11 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
     
     def _search_album_candidates(self, album_query: str) -> list:
         """Busca candidatos de álbum sem fazer download automático"""
-        try:
-            from main import (
-                is_duplicate_download, extract_artist_and_album, 
-                create_album_search_variations, wait_for_search_completion,
-                find_album_candidates
-            )
-        except ImportError:
-            from slskd_mp3_search import (
-                is_duplicate_download, extract_artist_and_album, 
-                create_album_search_variations, wait_for_search_completion,
-                find_album_candidates
-            )
+        from slskd_mp3_search import (
+            is_duplicate_download, extract_artist_and_album, 
+            create_album_search_variations, wait_for_search_completion,
+            find_album_candidates
+        )
         import os
         
         print(f"💿 Busca inteligente por ÁLBUM: '{album_query}'")
@@ -1293,78 +985,6 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
             logger.error(f"Erro ao exibir candidatos: {e}")
             # Fallback ainda mais simples
             simple_text = f"💿 Encontrados {len(candidates)} álbuns para: {original_query}\n\nUse os botões abaixo para selecionar:"
-            try:
-                await message.edit_text(simple_text, reply_markup=reply_markup)
-            except Exception as e2:
-                logger.error(f"Erro mesmo com texto simples: {e2}")
-                await message.edit_text("❌ Erro ao exibir resultados. Tente novamente.")
-    
-    async def _show_music_candidates(self, message, candidates: list, original_query: str):
-        """Mostra candidatos de música com botões para seleção"""
-        import os
-        
-        if not candidates:
-            await message.edit_text("❌ Nenhuma música encontrada")
-            return
-        
-        # Texto com informações das músicas (sem formatação markdown para evitar erros)
-        text = f"🎵 Músicas encontradas para: {original_query}\n\n"
-        text += "📋 Selecione uma música para baixar:\n\n"
-        
-        # Botões para cada música
-        keyboard = []
-        
-        for i, candidate in enumerate(candidates, 1):
-            # Informações da música no texto
-            filename = os.path.basename(candidate['filename'])
-            username = candidate['username']
-            
-            # Limpa caracteres problemáticos
-            clean_filename = self._escape_markdown(filename)
-            clean_username = self._escape_markdown(username)
-            
-            text += f"{i}. {clean_filename}\n"
-            text += f"   👤 {clean_username}\n"
-            text += f"   🎧 {candidate['bitrate']} kbps\n"
-            text += f"   💾 {candidate['size'] / 1024 / 1024:.1f} MB\n"
-            text += f"   ⏱️ {candidate.get('duration', 'N/A')}\n\n"
-            
-            # Botão para esta música (também limpa o texto do botão)
-            button_filename = filename.replace('[', '').replace(']', '').replace('*', '').replace('_', '')
-            button_text = f"🎵 {i}. {button_filename}"
-            
-            # Limita tamanho do botão
-            if len(button_text) > 64:  # Limite do Telegram
-                short_name = button_filename[:45] + "..."
-                button_text = f"🎵 {i}. {short_name}"
-            
-            # Dados do callback incluem índice e query original
-            callback_data = f"music_{i-1}_{hash(original_query) % 10000}"
-            
-            keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
-        
-        # Botão de cancelar
-        keyboard.append([InlineKeyboardButton("❌ Cancelar", callback_data="music_cancel")])
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Armazena candidatos temporariamente para uso nos callbacks
-        query_hash = hash(original_query) % 10000
-        if not hasattr(self, '_music_candidates_cache'):
-            self._music_candidates_cache = {}
-        self._music_candidates_cache[query_hash] = {
-            'candidates': candidates,
-            'original_query': original_query,
-            'timestamp': datetime.now()
-        }
-        
-        # Envia mensagem sem formatação markdown para evitar erros
-        try:
-            await message.edit_text(text, reply_markup=reply_markup)
-        except Exception as e:
-            logger.error(f"Erro ao exibir candidatos de música: {e}")
-            # Fallback ainda mais simples
-            simple_text = f"🎵 Encontradas {len(candidates)} músicas para: {original_query}\n\nUse os botões abaixo para selecionar:"
             try:
                 await message.edit_text(simple_text, reply_markup=reply_markup)
             except Exception as e2:
