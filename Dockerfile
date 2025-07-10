@@ -17,17 +17,15 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY slskd-mp3-search.py .
-COPY telegram_bot.py .
-COPY docker-entrypoint.sh .
-COPY run-telegram-bot.sh .
-COPY .env.example .
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+COPY config/.env.example .env.example
 
 # Make scripts executable
-RUN chmod +x docker-entrypoint.sh run-telegram-bot.sh
+RUN chmod +x scripts/*.sh
 
 # Create directories for data persistence
-RUN mkdir -p /app/data /app/cache
+RUN mkdir -p /app/data /app/cache /app/logs
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -38,7 +36,7 @@ ENV PGID=0
 USER root
 
 # Set entrypoint
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
 
 # Default command (will be passed to entrypoint)
 CMD []

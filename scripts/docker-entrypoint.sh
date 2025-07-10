@@ -33,8 +33,8 @@ PGID=${PGID:-0}
 echo "🔧 Running with PUID=$PUID and PGID=$PGID"
 
 # Create necessary directories and set permissions
-mkdir -p /app/data /app/cache
-chmod 755 /app/data /app/cache
+mkdir -p /app/data /app/cache /app/logs
+chmod 755 /app/data /app/cache /app/logs
 
 # Check if .env file exists
 if [ ! -f "/app/.env" ]; then
@@ -60,7 +60,7 @@ run_command() {
                 useradd -u $PUID -g $PGID -m -s /bin/bash appuser
             fi
             USERNAME=$(getent passwd $PUID | cut -d: -f1)
-            chown -R $PUID:$PGID /app/data /app/cache
+            chown -R $PUID:$PGID /app/data /app/cache /app/logs
             exec gosu $USERNAME "$@"
         else
             echo "⚠️ Custom PUID/PGID specified but gosu not available, running as root"
@@ -72,14 +72,14 @@ run_command() {
 # Check for Telegram bot command
 if [ "$1" = "--telegram-bot" ] || [ "$1" = "--bot" ]; then
     echo "🤖 Starting Telegram Bot..."
-    run_command python telegram_bot.py
+    run_command python src/telegram/bot.py
 fi
 
 # If no arguments provided, show usage
 if [ $# -eq 0 ]; then
     show_usage
-    run_command python slskd-mp3-search.py
+    run_command python src/cli/main.py
 else
     # Execute the Python script with provided arguments
-    run_command python slskd-mp3-search.py "$@"
+    run_command python src/cli/main.py "$@"
 fi

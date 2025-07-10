@@ -9,5 +9,9 @@ music-tag>=0.4.3
 # Telegram Bot integration
 python-telegram-bot>=20.0
 
+# Testing dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
 # System dependencies (handled by Dockerfile)
 # gcc and g++ are installed via apt-get in Dockerfile

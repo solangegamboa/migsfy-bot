@@ -35,6 +35,9 @@ Thumbs.db
 
 # Logs
 *.log
+logs/*.log
+logs/*.txt
+!logs/.gitkeep
 
 # Backup files
 *.backup

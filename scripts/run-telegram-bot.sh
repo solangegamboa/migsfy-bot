@@ -3,11 +3,14 @@
 echo "🤖 SLSKD Music Bot - Telegram Edition"
 echo "====================================="
 
+# Muda para o diretório raiz do projeto
+cd "$(dirname "$0")/.."
+
 # Verifica se .env existe
 if [ ! -f ".env" ]; then
     echo "❌ Arquivo .env não encontrado!"
-    echo "💡 Copie .env.example para .env e configure suas credenciais"
-    echo "💡 cp .env.example .env"
+    echo "💡 Copie config/.env.example para .env e configure suas credenciais"
+    echo "💡 cp config/.env.example .env"
     exit 1
 fi
 
@@ -25,4 +28,4 @@ echo "💡 Pressione Ctrl+C para parar"
 echo ""
 
 # Executa o bot
-python3 telegram_bot.py
+python3 src/telegram/bot.py

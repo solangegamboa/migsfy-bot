@@ -50,7 +50,7 @@ telegram-bot:
 # Run Telegram bot locally (without Docker)
 telegram-bot-local:
 	@echo "🤖 Starting Telegram bot locally..."
-	./run-telegram-bot.sh
+	./scripts/run-telegram-bot.sh
 
 # Run with docker-compose
 up:
