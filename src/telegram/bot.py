@@ -1394,9 +1394,17 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
     def _extract_album_name_from_metadata(self, candidate: dict) -> str:
         """Extrai nome do álbum usando o módulo especializado"""
         try:
+            import sys
+            import os
+            # Adiciona o diretório utils ao path se não estiver
+            utils_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'utils')
+            if utils_path not in sys.path:
+                sys.path.insert(0, utils_path)
+            
             from album_name_extractor import get_album_name
             return get_album_name(candidate)
-        except ImportError:
+        except (ImportError, Exception) as e:
+            print(f"Erro ao importar album_name_extractor: {e}")
             # Fallback para método básico se módulo não disponível
             return self._extract_album_name_from_path(candidate['directory'])
     
