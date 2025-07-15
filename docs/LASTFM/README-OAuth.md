@@ -10,6 +10,7 @@
    - Obtenha `API Key` e `Shared Secret`
 
 2. **Configurar .env**:
+
    ```env
    LASTFM_API_KEY=sua_api_key_aqui
    LASTFM_API_SECRET=seu_shared_secret_aqui
@@ -63,33 +64,40 @@ Agora: **APENAS tracks individuais são baixadas**
 ### Verificações Implementadas
 
 #### 1. **Análise do Nome do Arquivo**
+
 Rejeita arquivos com indicadores de álbum:
+
 - `full album`, `complete album`, `entire album`
 - `discography`, `collection`, `anthology`
 - `greatest hits`, `best of`, `compilation`
 - `box set`, `complete works`
 
 #### 2. **Contagem de Arquivos no Diretório**
+
 - Rejeita se há mais de 8 arquivos MP3 no mesmo diretório
 - Indica provável álbum completo
 
 #### 3. **Padrões de Numeração**
+
 Rejeita arquivos com padrões típicos de álbum:
+
 - `01-`, `02_`, `03 ` (numeração sequencial)
 - `track 1`, `track01`
 - `cd1`, `cd2`, `disc 1`
 
 #### 4. **Tamanho do Arquivo**
+
 - Rejeita arquivos maiores que 100MB
 - Álbuns tendem a ser muito grandes
 
 #### 5. **Duração**
+
 - Rejeita arquivos com mais de 1 hora
 - Indica compilação ou álbum
 
 ### Logs de Proteção
 
-```
+```text
 🎯 BUSCA RESTRITA A TRACK INDIVIDUAL: 'Artista - Música'
 🚫 ÁLBUNS SERÃO AUTOMATICAMENTE REJEITADOS
 🚫 REJEITADO: Arquivo parece ser álbum
@@ -101,24 +109,28 @@ Rejeita arquivos com padrões típicos de álbum:
 ## 🎵 Funcionalidades Disponíveis
 
 ### 1. **Download por Tags** (Básico + OAuth)
+
 ```bash
 # Funciona com ambos os tipos de autenticação
 python3 src/cli/main.py --lastfm-tag "rock" --limit 20
 ```
 
 ### 2. **Download de Top Tracks Pessoais** (Requer OAuth)
+
 ```bash
 # Top tracks do usuário autenticado
 python3 src/cli/lastfm_oauth.py download-top --limit 30 --period 6month
 ```
 
 ### 3. **Download de Loved Tracks** (Requer OAuth)
+
 ```bash
 # Músicas curtidas pelo usuário
 python3 src/cli/lastfm_oauth.py download-loved --limit 50
 ```
 
 ### 4. **Informações do Usuário** (Requer OAuth)
+
 ```bash
 # Ver estatísticas pessoais
 python3 src/cli/lastfm_oauth.py user-info
@@ -127,7 +139,8 @@ python3 src/cli/lastfm_oauth.py user-info
 ## 🔄 Fluxo de Autenticação
 
 ### Primeira Vez
-```
+
+```text
 🔐 Iniciando autenticação OAuth com Last.fm...
 📝 Obtendo token de autenticação...
 🌐 Abrindo navegador para autorização...
@@ -146,7 +159,8 @@ Pressione ENTER após autorizar a aplicação no navegador...
 ```
 
 ### Próximas Vezes
-```
+
+```text
 🔐 Tentando autenticação OAuth...
 Tentando usar session key armazenado...
 Autenticação bem-sucedida com session key armazenado para usuário: seu_usuario
@@ -156,12 +170,14 @@ Autenticação bem-sucedida com session key armazenado para usuário: seu_usuari
 ## 🛡️ Segurança
 
 ### Session Key
+
 - Armazenado em `.lastfm_session` (local)
 - Não exposto em logs
 - Reutilizado automaticamente
 - Pode ser limpo com `clear-auth`
 
 ### Fallback
+
 - Se OAuth falhar, usa API básica
 - Funcionalidades básicas sempre disponíveis
 - Dados pessoais requerem OAuth
@@ -169,12 +185,14 @@ Autenticação bem-sucedida com session key armazenado para usuário: seu_usuari
 ## 🚀 Vantagens
 
 ### Para o Usuário
+
 - **Personalização**: Acesso a dados pessoais do Last.fm
 - **Conveniência**: Autenticação única, reutilização automática
 - **Segurança**: Apenas tracks individuais, nunca álbuns
 - **Flexibilidade**: Funciona com ou sem OAuth
 
 ### Para o Sistema
+
 - **Eficiência**: Session key reutilizado
 - **Robustez**: Múltiplas verificações anti-álbum
 - **Compatibilidade**: Mantém funcionalidades básicas
@@ -183,6 +201,7 @@ Autenticação bem-sucedida com session key armazenado para usuário: seu_usuari
 ## 🔧 Troubleshooting
 
 ### Session Key Inválido
+
 ```bash
 # Limpar e reautenticar
 python3 src/cli/lastfm_oauth.py clear-auth
@@ -190,11 +209,13 @@ python3 src/cli/lastfm_oauth.py auth
 ```
 
 ### Álbum Sendo Baixado
+
 - Impossível com as verificações implementadas
 - Todos os downloads passam por 5 camadas de proteção
 - Logs mostram exatamente por que arquivos foram rejeitados
 
 ### Navegador Não Abre
+
 - URL é mostrada no terminal
 - Copie e cole manualmente no navegador
 - Continue o processo normalmente
@@ -202,7 +223,8 @@ python3 src/cli/lastfm_oauth.py auth
 ## 📊 Estatísticas de Proteção
 
 A cada download, o sistema mostra:
-```
+
+```text
 📊 DOWNLOAD CONCLUÍDO - Tag: 'rock'
 🎯 MODO: Apenas tracks individuais (álbuns rejeitados)
 📊 Total de músicas: 25
