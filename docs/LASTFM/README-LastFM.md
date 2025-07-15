@@ -91,25 +91,56 @@ python3 src/cli/main.py --lastfm-tag "pop" --limit 50 --output-dir "./pop-collec
 ## 🔧 Como Funciona
 
 ### 1. Descoberta de Músicas
-- Conecta à API do Last.fm
+
+- Conecta à API do Last.fm usando OAuth (preferencial) ou API básica
 - Busca as músicas mais populares para a tag especificada
 - Ordena por popularidade (playcount)
+- Suporte a fallback automático entre métodos de autenticação
 
-### 2. Autenticação Obrigatória
-- Requer credenciais válidas da API Last.fm
-- Não funciona sem configuração adequada
-- Falha com mensagens de erro claras se não autenticado
+### 2. Autenticação Flexível
 
-### 3. Download Otimizado
-- Força download apenas de tracks individuais (nunca álbuns completos)
-- Usa o sistema de busca inteligente existente
-- Aplica verificação de duplicatas
-- Organiza downloads por diretórios de tag
+- **OAuth (Recomendado)**: Acesso completo a recursos pessoais
+- **API Básica**: Funciona apenas com API Key e Secret
+- **Fallback Automático**: Se OAuth falhar, usa API básica automaticamente
+- Mensagens de erro claras para problemas de configuração
 
-### 4. Organização Automática
-- Cria diretório com nome da tag
-- Sanitiza nomes de arquivos
-- Mantém histórico de downloads
+### 3. Proteção Anti-Álbum Rigorosa
+
+O sistema implementa **5 camadas de verificação** para garantir que apenas tracks individuais sejam baixadas:
+
+#### Verificação 1: Análise do Nome do Arquivo
+- Detecta indicadores como "full album", "complete album", "discography"
+- Rejeita automaticamente arquivos com termos suspeitos
+
+#### Verificação 2: Contagem de Arquivos no Diretório
+- Conta arquivos MP3 no mesmo diretório do usuário
+- Rejeita se há mais de 8 arquivos (provável álbum)
+
+#### Verificação 3: Padrões de Numeração
+- Detecta padrões como "01-", "02_", "track 1", "cd1"
+- Identifica numeração sequencial típica de álbuns
+
+#### Verificação 4: Tamanho do Arquivo
+- Rejeita arquivos maiores que 100MB
+- Álbuns completos tendem a ser muito grandes
+
+#### Verificação 5: Duração
+- Rejeita arquivos com mais de 1 hora de duração
+- Indica compilações ou álbuns completos
+
+### 4. Download Otimizado
+
+- **Busca Inteligente**: Filtra variações de busca que podem trazer álbuns
+- **Score Seletivo**: Usa score mínimo mais alto para ser mais criterioso
+- **Verificação Múltipla**: Cada arquivo passa por todas as 5 verificações
+- **Logs Detalhados**: Transparência total sobre rejeições
+
+### 5. Organização Automática
+
+- Cria diretório com nome da tag sanitizado
+- Mantém histórico de downloads para evitar duplicatas
+- Relatórios detalhados de sucesso/falha
+- Pausa inteligente entre downloads
 
 ## 📊 Relatório de Downloads
 
