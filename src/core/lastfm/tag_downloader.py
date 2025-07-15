@@ -325,7 +325,16 @@ def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=Tr
         tuple: (total, successful, failed, skipped) contagem de downloads
     """
     # Importar funções necessárias
-    from cli.main import search_and_download, is_duplicate_download
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+    from cli.main import smart_mp3_search, is_duplicate_download, connectToSlskd
+    
+    # Conectar ao SLSKD
+    slskd = connectToSlskd()
+    if not slskd:
+        logger.error("Não foi possível conectar ao servidor SLSKD")
+        return (0, 0, 0, 0)
     
     # Definir diretório de saída se especificado
     original_dir = os.getcwd()
@@ -367,8 +376,9 @@ def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=Tr
         logger.info(f"[{i}/{len(top_tracks)}] Baixando '{query}'")
         
         try:
-            # Chamar a função de download
-            if search_and_download(query):
+            # Chamar a função de busca e download
+            result = smart_mp3_search(slskd, query)
+            if result:
                 successful += 1
                 logger.info(f"✓ Download concluído: '{query}'")
             else:
