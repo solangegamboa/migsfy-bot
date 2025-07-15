@@ -346,8 +346,12 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 
 **Last.fm:**
 `/lastfm_tag <tag>` - Baixa as 25 músicas mais populares de uma tag
-`/lastfm_tag <tag> <número>` - Especifica quantidade de músicas
-Exemplo: `/lastfm_tag rock alternativo 50`
+`/lastfm_tag <tag> <número>` - Especifica quantidade de músicas (máx: 100)
+Exemplos:
+• `/lastfm_tag rock alternativo` - 25 músicas mais populares
+• `/lastfm_tag jazz 50` - 50 músicas mais populares
+• `/lastfm_tag metal 10` - 10 músicas mais populares
+_Obs: Músicas já baixadas anteriormente serão puladas_
 
 **Histórico:**
 `/history` - Ver downloads
@@ -450,9 +454,15 @@ Exemplo: `/lastfm_tag rock alternativo 50`
         # Verificar se há argumentos
         if not context.args:
             await update.message.reply_text(
-                "❌ Por favor, forneça uma tag do Last.fm.\n"
-                "Exemplo: `/lastfm_tag rock alternativo`\n"
-                "Opcionalmente, você pode especificar o número de músicas: `/lastfm_tag rock alternativo 50`",
+                "❌ **Comando Incompleto**\n\n"
+                "**Uso do comando:**\n"
+                "`/lastfm_tag <tag>` - Baixa as 25 músicas mais populares\n"
+                "`/lastfm_tag <tag> <número>` - Especifica quantidade (máx: 100)\n\n"
+                "**Exemplos:**\n"
+                "• `/lastfm_tag rock alternativo` - 25 músicas mais populares\n"
+                "• `/lastfm_tag jazz 50` - 50 músicas mais populares\n\n"
+                "**Tags populares:** rock, pop, jazz, metal, indie, electronic, hip-hop, classical\n"
+                "_Músicas já baixadas anteriormente serão puladas automaticamente_",
                 parse_mode='Markdown'
             )
             return
@@ -465,7 +475,8 @@ Exemplo: `/lastfm_tag rock alternativo 50`
             limit = int(tag_parts.pop())
             if limit > 100:
                 await update.message.reply_text(
-                    "⚠️ Limite máximo é 100 músicas. Usando 100 como limite.",
+                    "⚠️ O limite máximo é de 100 músicas por vez para evitar sobrecarregar o servidor.\n"
+                    "Usando 100 como limite. Para baixar mais músicas, execute o comando novamente após o término.",
                     parse_mode='Markdown'
                 )
                 limit = 100
@@ -475,8 +486,11 @@ Exemplo: `/lastfm_tag rock alternativo 50`
         
         # Informar ao usuário que o processo começou
         status_message = await update.message.reply_text(
-            f"🔍 Buscando as {limit} músicas mais populares da tag *{tag_name}* no Last.fm...\n"
-            "Este processo pode levar alguns minutos.",
+            f"🔍 **Buscando músicas da tag \"{tag_name}\" no Last.fm**\n\n"
+            f"• Quantidade solicitada: *{limit}* músicas\n"
+            f"• Músicas já baixadas anteriormente serão puladas\n"
+            f"• As músicas serão baixadas em ordem de popularidade\n\n"
+            f"_Este processo pode levar alguns minutos. Por favor, aguarde..._",
             parse_mode='Markdown'
         )
         
@@ -504,8 +518,11 @@ Exemplo: `/lastfm_tag rock alternativo 50`
             
             # Atualizar mensagem de status
             await status_message.edit_text(
-                f"⏳ Iniciando download das {limit} músicas mais populares da tag *{tag_name}*...\n"
-                "As músicas que já foram baixadas anteriormente serão puladas.",
+                f"⏳ **Download iniciado: Tag \"{tag_name}\"**\n\n"
+                f"• Buscando as {limit} músicas mais populares\n"
+                f"• Verificando histórico de downloads\n"
+                f"• Preparando para baixar músicas novas\n\n"
+                f"_O progresso será atualizado ao finalizar. Por favor, aguarde..._",
                 parse_mode='Markdown'
             )
             
@@ -527,20 +544,48 @@ Exemplo: `/lastfm_tag rock alternativo 50`
             # Enviar mensagem de conclusão
             if total == 0:
                 await status_message.edit_text(
-                    f"❌ Nenhuma música encontrada para a tag *{tag_name}*.",
+                    f"❌ **Nenhuma música encontrada**\n\n"
+                    f"Não foi possível encontrar músicas para a tag *{tag_name}*.\n\n"
+                    f"Sugestões:\n"
+                    f"• Verifique se o nome da tag está correto\n"
+                    f"• Tente uma tag mais popular (rock, pop, jazz, etc.)\n"
+                    f"• Tente uma variação da tag (ex: 'rock' em vez de 'rock alternativo')",
                     parse_mode='Markdown'
                 )
             else:
                 # Calcular porcentagem de sucesso
                 success_rate = (successful / (total - skipped)) * 100 if total > skipped else 0
                 
+                # Criar mensagem de status personalizada
+                if successful == 0 and skipped > 0:
+                    status_emoji = "ℹ️"
+                    status_text = "Todas as músicas já estavam baixadas"
+                elif successful == 0 and failed > 0:
+                    status_emoji = "❌"
+                    status_text = "Não foi possível baixar nenhuma música"
+                elif success_rate >= 80:
+                    status_emoji = "✅"
+                    status_text = "Download concluído com sucesso"
+                elif success_rate >= 50:
+                    status_emoji = "⚠️"
+                    status_text = "Download parcialmente concluído"
+                else:
+                    status_emoji = "⚠️"
+                    status_text = "Download com muitas falhas"
+                
                 await status_message.edit_text(
-                    f"✅ Download da tag *{tag_name}* concluído em {elapsed_str}!\n\n"
-                    f"📊 *Estatísticas:*\n"
-                    f"- Total de músicas: {total}\n"
-                    f"- Downloads bem-sucedidos: {successful}\n"
-                    f"- Downloads com falha: {failed}\n"
-                    f"- Músicas puladas (já baixadas): {skipped}\n"
+                    f"{status_emoji} **{status_text}**\n\n"
+                    f"**Tag:** {tag_name}\n"
+                    f"**Tempo:** {elapsed_str}\n\n"
+                    f"📊 **Estatísticas:**\n"
+                    f"• Total de músicas: {total}\n"
+                    f"• Downloads bem-sucedidos: {successful}\n"
+                    f"• Downloads com falha: {failed}\n"
+                    f"• Músicas puladas (já baixadas): {skipped}\n"
+                    f"• Taxa de sucesso: {success_rate:.1f}%\n\n"
+                    f"_Use /history para ver o histórico completo de downloads_",
+                    parse_mode='Markdown'
+                )
                     f"- Taxa de sucesso: {success_rate:.1f}%",
                     parse_mode='Markdown'
                 )
@@ -554,7 +599,14 @@ Exemplo: `/lastfm_tag rock alternativo 50`
             
             # Enviar mensagem de erro
             await status_message.edit_text(
-                f"❌ Erro ao baixar músicas da tag *{tag_name}*:\n`{str(e)}`",
+                f"❌ **Erro ao processar a tag \"{tag_name}\"**\n\n"
+                f"Ocorreu um erro durante o download das músicas:\n"
+                f"`{str(e)}`\n\n"
+                f"**Possíveis soluções:**\n"
+                f"• Verifique se as credenciais do Last.fm estão configuradas\n"
+                f"• Verifique se o servidor SLSKD está online\n"
+                f"• Tente novamente mais tarde\n"
+                f"• Tente com uma tag diferente",
                 parse_mode='Markdown'
             )
     
