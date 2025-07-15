@@ -67,6 +67,37 @@ Este arquivo contém exemplos práticos de como usar o bot do Telegram.
 /spotify https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M limit=5 remove=yes
 ```
 
+## 🏷️ Last.fm Integration
+
+### Comando: `/lastfm_tag`
+
+```
+/lastfm_tag rock
+/lastfm_tag jazz 50
+/lastfm_tag "alternative rock" 30
+/lastfm_tag metal 10
+/lastfm_tag pop 25
+/lastfm_tag blues 15
+```
+
+### Comando: `/lastfm_artist`
+
+```
+/lastfm_artist Radiohead
+/lastfm_artist "The Beatles" 20
+/lastfm_artist "Pink Floyd" 50
+/lastfm_artist "Led Zeppelin" 30
+/lastfm_artist Queen 25
+/lastfm_artist "Bob Dylan" 15
+```
+
+**💡 Dicas para Last.fm:**
+- Tags: máximo 100 músicas, padrão 25
+- Artistas: máximo 50 músicas, padrão 30
+- Use aspas para nomes com espaços
+- Processo totalmente automático (não pergunta nada)
+- Músicas já baixadas são puladas automaticamente
+
 ## 📋 Histórico
 
 ```

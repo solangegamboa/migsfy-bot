@@ -14,7 +14,10 @@ Adicione ao seu arquivo `.env`:
 # Tags para download automático (separadas por vírgula)
 LASTFM_AUTO_TAGS=rock,pop,jazz,alternative rock,metal,blues,electronic
 
-# Limite de músicas por tag (padrão: 15)
+# Artistas para download automático (separadas por vírgula)
+LASTFM_AUTO_ARTISTS=Pink Floyd,The Beatles,Led Zeppelin,Queen
+
+# Limite de músicas por tag/artista (padrão: 15)
 LASTFM_AUTO_LIMIT=20
 
 # Diretório de saída (padrão: ./downloads/lastfm_auto)
@@ -67,13 +70,16 @@ ls -la /tmp/lastfm_auto_download.lock
 
 ### Exemplo de Relatório
 
-```
+```text
 📊 RELATÓRIO FINAL - Download Automático Last.fm
 ================================================
 🕐 Duração total: 1847s (30min)
 🏷️ Total de tags: 5
+👤 Total de artistas: 3
 ✅ Tags processadas com sucesso: 4
+✅ Artistas processados com sucesso: 3
 ❌ Tags com falha: 1
+❌ Artistas com falha: 0
 📁 Diretório de saída: ./downloads/lastfm_auto
 💾 Uso do disco: 45%
 📦 Tamanho total dos downloads: 2.3GB

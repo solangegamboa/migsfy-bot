@@ -436,3 +436,163 @@ def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=Tr
     os.chdir(original_dir)
     
     return (len(top_tracks), successful, failed, skipped)
+
+def get_artist_top_tracks(artist_name, limit=30):
+    """
+    Obtém as músicas mais populares de um artista específico do Last.fm.
+    
+    Args:
+        artist_name (str): Nome do artista
+        limit (int): Número máximo de músicas para retornar
+        
+    Returns:
+        list: Lista de tuplas (artista, título, playcount) das músicas mais populares
+        None: Se houver erro de autenticação ou API indisponível
+    """
+    # Tentar usar a API do Last.fm
+    network = get_lastfm_network()
+    
+    # Se não conseguir conectar à API, retornar erro
+    if not network:
+        logger.error("❌ Não foi possível conectar à API do Last.fm")
+        logger.error("💡 Verifique suas credenciais LASTFM_API_KEY e LASTFM_API_SECRET no arquivo .env")
+        logger.error("💡 Obtenha suas credenciais em: https://www.last.fm/api/account/create")
+        return None
+    
+    try:
+        # Obter o artista
+        artist = network.get_artist(artist_name)
+        
+        # Obter as músicas mais populares do artista
+        top_tracks = artist.get_top_tracks(limit=limit)
+        
+        # Formatar os resultados como tuplas (artista, título, playcount)
+        results = []
+        for track in top_tracks:
+            artist_name_result = track.item.get_artist().get_name()
+            title = track.item.get_title()
+            playcount = track.weight if hasattr(track, 'weight') else 0
+            results.append((artist_name_result, title, playcount))
+        
+        logger.info(f"Encontradas {len(results)} músicas para o artista '{artist_name}'")
+        return results
+    
+    except pylast.WSError as e:
+        if "Artist not found" in str(e):
+            logger.error(f"❌ Artista '{artist_name}' não encontrado no Last.fm")
+            logger.error("💡 Verifique a grafia do nome do artista")
+        else:
+            logger.error(f"❌ Erro na API do Last.fm: {e}")
+            if "Invalid API key" in str(e) or "Invalid method signature" in str(e):
+                logger.error("💡 Verifique suas credenciais LASTFM_API_KEY e LASTFM_API_SECRET no arquivo .env")
+        return None
+    except pylast.PyLastError as e:
+        logger.error(f"❌ Erro ao acessar a API do Last.fm: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"❌ Erro inesperado: {e}")
+        return None
+
+def download_artist_top_tracks(artist_name, limit=30, output_dir=None, skip_existing=True):
+    """
+    Baixa as músicas mais populares de um artista do Last.fm.
+    GARANTE que apenas tracks individuais sejam baixadas, nunca álbuns completos.
+    
+    Args:
+        artist_name (str): Nome do artista
+        limit (int): Número máximo de músicas para baixar
+        output_dir (str): Diretório de saída para os downloads
+        skip_existing (bool): Se True, pula músicas já baixadas anteriormente
+        
+    Returns:
+        tuple: (total, successful, failed, skipped) contagem de downloads
+    """
+    # Importar funções necessárias
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+    from cli.main import (
+        is_duplicate_download, 
+        connectToSlskd,
+        add_to_download_history
+    )
+    
+    # Conectar ao SLSKD
+    slskd = connectToSlskd()
+    if not slskd:
+        logger.error("Não foi possível conectar ao servidor SLSKD")
+        return (0, 0, 0, 0)
+    
+    # Definir diretório de saída se especificado
+    original_dir = os.getcwd()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        os.chdir(output_dir)
+    
+    # Obter as músicas mais populares do artista
+    logger.info(f"Obtendo as {limit} músicas mais populares do artista '{artist_name}'...")
+    top_tracks = get_artist_top_tracks(artist_name, limit)
+    
+    if top_tracks is None:
+        logger.error("Falha na autenticação ou configuração do Last.fm")
+        os.chdir(original_dir)
+        return None
+    
+    if not top_tracks:
+        logger.error(f"Nenhuma música encontrada para o artista '{artist_name}'")
+        os.chdir(original_dir)
+        return (0, 0, 0, 0)
+    
+    logger.info(f"Encontradas {len(top_tracks)} músicas. Iniciando downloads...")
+    logger.info("🚫 MODO ANTI-ÁLBUM ATIVADO: Apenas tracks individuais serão baixadas")
+    
+    # Criar diretório para o artista
+    artist_dir = sanitize_filename(artist_name)
+    os.makedirs(artist_dir, exist_ok=True)
+    os.chdir(artist_dir)
+    
+    # Baixar cada música
+    successful = 0
+    failed = 0
+    skipped = 0
+    
+    for i, (artist, title, playcount) in enumerate(top_tracks, 1):
+        # Formatar a consulta como "Artista - Título"
+        query = f"{artist} - {title}"
+        
+        # Verificar se já foi baixada anteriormente
+        if skip_existing and is_duplicate_download(query):
+            logger.info(f"[{i}/{len(top_tracks)}] Pulando (já baixada): '{query}' ({playcount:,} plays)")
+            skipped += 1
+            continue
+        
+        logger.info(f"[{i}/{len(top_tracks)}] Baixando TRACK INDIVIDUAL: '{query}' ({playcount:,} plays)")
+        
+        try:
+            # Usar busca restrita para APENAS tracks individuais
+            result = _search_single_track_only(slskd, query)
+            if result:
+                successful += 1
+                logger.info(f"✓ TRACK INDIVIDUAL baixada: '{query}'")
+            else:
+                failed += 1
+                logger.warning(f"✗ Falha no download da track: '{query}'")
+            
+            # Pequena pausa entre downloads
+            time.sleep(2)
+        except Exception as e:
+            failed += 1
+            logger.error(f"Erro ao processar '{query}': {e}")
+    
+    # Resumo final
+    logger.info(f"\n📊 DOWNLOAD CONCLUÍDO - Artista: '{artist_name}'")
+    logger.info(f"🎯 MODO: Apenas tracks individuais (álbuns rejeitados)")
+    logger.info(f"📊 Total de músicas: {len(top_tracks)}")
+    logger.info(f"✅ Downloads bem-sucedidos: {successful}")
+    logger.info(f"❌ Downloads com falha: {failed}")
+    logger.info(f"⏭️ Músicas puladas (já baixadas): {skipped}")
+    
+    # Restaurar diretório original
+    os.chdir(original_dir)
+    
+    return (len(top_tracks), successful, failed, skipped)

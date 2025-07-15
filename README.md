@@ -52,6 +52,9 @@ python3 src/cli/main.py --playlist "URL_PLAYLIST"
 # Baixar por tag Last.fm
 python3 src/cli/main.py --lastfm-tag "rock" --limit 25
 
+# Baixar por artista Last.fm
+python3 src/cli/main.py --lastfm-artist "Pink Floyd" --limit 30
+
 # Download automático Last.fm (via script)
 ./scripts/lastfm-auto-download.sh
 ```
@@ -65,6 +68,8 @@ python3 src/cli/main.py --lastfm-tag "rock" --limit 25
 # /search Artista - Música
 # /album Artista - Álbum
 # /spotify URL_PLAYLIST
+# /lastfm_tag rock 25
+# /lastfm_artist "Pink Floyd" 30
 ```
 
 ## 📁 Estrutura do Projeto

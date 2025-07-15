@@ -347,10 +347,13 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 **Last.fm:**
 `/lastfm_tag <tag>` - Baixa automaticamente as 25 músicas mais populares de uma tag
 `/lastfm_tag <tag> <número>` - Especifica quantidade de músicas (máx: 100)
+`/lastfm_artist <artista>` - Baixa automaticamente as 30 músicas mais populares de um artista
+`/lastfm_artist <artista> <número>` - Especifica quantidade de músicas (máx: 50)
 Exemplos:
 • `/lastfm_tag rock alternativo` - 25 músicas mais populares (automático)
 • `/lastfm_tag jazz 50` - 50 músicas mais populares (automático)
-• `/lastfm_tag metal 10` - 10 músicas mais populares (automático)
+• `/lastfm_artist Radiohead` - 30 músicas mais populares (automático)
+• `/lastfm_artist The Beatles 20` - 20 músicas mais populares (automático)
 _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente automático - não pergunta nada!_
 
 **Histórico:**
@@ -632,6 +635,152 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
                 f"• Verifique se o servidor SLSKD está online\n"
                 f"• Tente novamente mais tarde\n"
                 f"• Tente com uma tag diferente",
+                parse_mode='Markdown'
+            )
+    
+    async def lastfm_artist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Comando /lastfm_artist para baixar as 30 músicas mais populares de um artista do Last.fm"""
+        if not self._is_authorized(update):
+            return
+        
+        # Verificar se há argumentos
+        if not context.args:
+            await update.message.reply_text(
+                "❌ **Comando Incompleto**\n\n"
+                "**Uso do comando:**\n"
+                "`/lastfm_artist <nome_do_artista>` - Baixa automaticamente as 30 músicas mais populares\n"
+                "`/lastfm_artist <nome_do_artista> <número>` - Especifica quantidade (máx: 50)\n\n"
+                "**Exemplos:**\n"
+                "• `/lastfm_artist Radiohead` - 30 músicas mais populares (automático)\n"
+                "• `/lastfm_artist The Beatles 20` - 20 músicas mais populares (automático)\n"
+                "• `/lastfm_artist Pink Floyd 50` - 50 músicas mais populares (automático)\n\n"
+                "🤖 **Processo automático:** As primeiras músicas que não estão no seu histórico serão baixadas diretamente, sem perguntar nada!",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Verificar se o último argumento é um número (quantidade de músicas)
+        limit = 30  # Valor padrão
+        artist_parts = context.args.copy()
+        
+        if artist_parts and artist_parts[-1].isdigit():
+            limit = int(artist_parts.pop())
+            if limit > 50:
+                await update.message.reply_text(
+                    "⚠️ O limite máximo é de 50 músicas por vez para evitar sobrecarregar o servidor.\n"
+                    "Usando 50 como limite. Para baixar mais músicas, execute o comando novamente após o término.",
+                    parse_mode='Markdown'
+                )
+                limit = 50
+        
+        # Juntar os argumentos restantes para formar o nome do artista
+        artist_name = " ".join(artist_parts)
+        
+        # Informar ao usuário que o processo começou
+        status_message = await update.message.reply_text(
+            f"🎤 **Iniciando download automático do artista \"{artist_name}\"**\n\n"
+            f"• Quantidade solicitada: *{limit}* músicas\n"
+            f"• Músicas já baixadas anteriormente serão puladas automaticamente\n"
+            f"• As primeiras {limit} músicas mais populares que não tenho serão baixadas diretamente\n"
+            f"• **Não será perguntado nada - processo totalmente automático**\n\n"
+            f"_Este processo pode levar alguns minutos. Por favor, aguarde..._",
+            parse_mode='Markdown'
+        )
+        
+        # Criar uma tarefa assíncrona para o download
+        self.task_counter += 1
+        task_id = f"lastfm_artist_{self.task_counter}"
+        
+        # Adicionar tarefa à lista de tarefas ativas
+        user_id = update.effective_user.id
+        if user_id not in self.active_tasks:
+            self.active_tasks[user_id] = {}
+        
+        self.active_tasks[user_id][task_id] = {
+            'type': 'lastfm_artist',
+            'artist': artist_name,
+            'limit': limit,
+            'status': 'iniciando',
+            'start_time': time.time(),
+            'message_id': status_message.message_id
+        }
+        
+        # Executar download em background
+        asyncio.create_task(self._handle_lastfm_artist_download(update, artist_name, limit, task_id))
+    
+    async def _handle_lastfm_artist_download(self, update: Update, artist_name: str, limit: int, task_id: str):
+        """Processa o download das top tracks de um artista do Last.fm em background"""
+        user_id = update.effective_user.id
+        
+        try:
+            # Atualizar status da tarefa
+            if user_id in self.active_tasks and task_id in self.active_tasks[user_id]:
+                self.active_tasks[user_id][task_id]['status'] = 'baixando'
+            
+            # Importar função de download do Last.fm
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core', 'lastfm'))
+            from tag_downloader import download_artist_top_tracks
+            
+            # Executar download
+            result = download_artist_top_tracks(artist_name, limit=limit, skip_existing=True)
+            
+            # Remover tarefa da lista de ativas
+            if user_id in self.active_tasks and task_id in self.active_tasks[user_id]:
+                del self.active_tasks[user_id][task_id]
+            
+            if result is None:
+                await update.message.reply_text(
+                    f"❌ **Erro no download do artista \"{artist_name}\"**\n\n"
+                    f"**Possíveis causas:**\n"
+                    f"• Artista não encontrado no Last.fm\n"
+                    f"• Credenciais do Last.fm não configuradas\n"
+                    f"• Servidor SLSKD offline\n"
+                    f"• Problema de conectividade\n\n"
+                    f"**Dica:** Verifique a grafia do nome do artista",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            total, successful, failed, skipped = result
+            
+            # Calcular estatísticas
+            success_rate = (successful / total * 100) if total > 0 else 0
+            
+            # Preparar mensagem de resultado
+            result_text = f"🎤 **Download concluído - Artista: {artist_name}**\n\n"
+            result_text += f"📊 **Estatísticas:**\n"
+            result_text += f"• Total de músicas: *{total}*\n"
+            result_text += f"• ✅ Downloads bem-sucedidos: *{successful}*\n"
+            result_text += f"• ❌ Downloads com falha: *{failed}*\n"
+            result_text += f"• ⏭️ Músicas já baixadas: *{skipped}*\n"
+            result_text += f"• 📈 Taxa de sucesso: *{success_rate:.1f}%*\n\n"
+            
+            if successful > 0:
+                result_text += f"🎉 **{successful} novas músicas de {artist_name} foram baixadas com sucesso!**\n\n"
+                result_text += f"🎯 **Modo anti-álbum ativo:** Apenas tracks individuais foram baixadas\n"
+                result_text += f"📁 **Localização:** Diretório `{artist_name.replace(' ', '_')}`"
+            else:
+                result_text += f"ℹ️ **Nenhuma música nova foi baixada**\n\n"
+                if skipped > 0:
+                    result_text += f"Todas as {skipped} músicas já estavam no seu histórico de downloads."
+                else:
+                    result_text += f"Não foi possível baixar nenhuma música do artista."
+            
+            await update.message.reply_text(result_text, parse_mode='Markdown')
+            
+        except Exception as e:
+            # Remover tarefa da lista de ativas em caso de erro
+            if user_id in self.active_tasks and task_id in self.active_tasks[user_id]:
+                del self.active_tasks[user_id][task_id]
+            
+            await update.message.reply_text(
+                f"❌ **Erro inesperado no download do artista \"{artist_name}\"**\n\n"
+                f"**Erro:** `{str(e)}`\n\n"
+                f"**Possíveis soluções:**\n"
+                f"• Verifique se as credenciais do Last.fm estão configuradas\n"
+                f"• Verifique se o servidor SLSKD está online\n"
+                f"• Tente novamente mais tarde\n"
+                f"• Tente com um artista diferente",
                 parse_mode='Markdown'
             )
     
@@ -1845,6 +1994,7 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
         application.add_handler(CommandHandler("tasks", self.tasks_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("lastfm_tag", self.lastfm_tag_command))
+        application.add_handler(CommandHandler("lastfm_artist", self.lastfm_artist_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback_query))
         
         # Adiciona handler de erro

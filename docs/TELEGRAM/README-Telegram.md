@@ -101,6 +101,20 @@ Para descobrir seu ID do Telegram:
 /spotify URL limit=5 remove=yes
 ```
 
+### Last.fm Integration
+
+```
+# Download por tags/gêneros
+/lastfm_tag rock - Baixa 25 músicas mais populares (padrão)
+/lastfm_tag jazz 50 - Baixa 50 músicas mais populares
+/lastfm_tag "alternative rock" 30 - Baixa 30 músicas de rock alternativo
+
+# Download por artista
+/lastfm_artist Radiohead - Baixa 30 músicas mais populares (padrão)
+/lastfm_artist "The Beatles" 20 - Baixa 20 músicas mais populares
+/lastfm_artist "Pink Floyd" 50 - Baixa 50 músicas mais populares (máximo)
+```
+
 ### Histórico
 
 - `/history` - Mostra histórico de downloads

@@ -27,13 +27,23 @@ LASTFM_API_SECRET=seu_shared_secret_aqui
 
 ## 🎵 Como Usar
 
-### Comando Básico
+### Comandos Básicos
+
+#### Download por Tags/Gêneros
 
 ```bash
 python3 src/cli/main.py --lastfm-tag "nome_da_tag"
 ```
 
+#### Download por Artista
+
+```bash
+python3 src/cli/main.py --lastfm-artist "nome_do_artista"
+```
+
 ### Exemplos Práticos
+
+#### Downloads por Tag
 
 ```bash
 # Baixar 25 músicas de rock (padrão)
@@ -50,6 +60,25 @@ python3 src/cli/main.py --lastfm-tag "metal" --no-skip-existing
 
 # Baixar muitas músicas de pop
 python3 src/cli/main.py --lastfm-tag "pop" --limit 50 --output-dir "./pop-collection"
+```
+
+#### Downloads por Artista
+
+```bash
+# Baixar 30 músicas mais populares do Pink Floyd (padrão)
+python3 src/cli/main.py --lastfm-artist "Pink Floyd"
+
+# Baixar 15 músicas mais populares dos Beatles
+python3 src/cli/main.py --lastfm-artist "The Beatles" --limit 15
+
+# Baixar músicas do Radiohead para diretório específico
+python3 src/cli/main.py --lastfm-artist "Radiohead" --limit 20 --output-dir "./downloads/radiohead"
+
+# Incluir músicas já baixadas anteriormente
+python3 src/cli/main.py --lastfm-artist "Led Zeppelin" --no-skip-existing
+
+# Baixar muitas músicas de um artista
+python3 src/cli/main.py --lastfm-artist "Queen" --limit 50 --output-dir "./queen-collection"
 ```
 
 ## 🏷️ Tags Populares Suportadas
@@ -154,7 +183,7 @@ O sistema implementa **5 camadas de verificação** para garantir que apenas tra
 
 Após cada execução, você verá um relatório detalhado:
 
-```
+```text
 📊 RELATÓRIO FINAL - Tag: 'rock'
 ✅ Downloads bem-sucedidos: 18
 ❌ Downloads com falha: 5
@@ -166,7 +195,7 @@ Após cada execução, você verá um relatório detalhado:
 
 ### Erro de Autenticação
 
-```
+```text
 ❌ Falha na autenticação ou configuração do Last.fm
 💡 Verifique suas credenciais no arquivo .env:
    - LASTFM_API_KEY
@@ -178,7 +207,7 @@ Após cada execução, você verá um relatório detalhado:
 
 ### Erro de API Key
 
-```
+```text
 ❌ Credenciais do Last.fm não encontradas no arquivo .env
 ```
 
@@ -186,7 +215,7 @@ Após cada execução, você verá um relatório detalhado:
 
 ### Tag Não Encontrada
 
-```
+```text
 ❌ Tag 'nome_tag' não encontrada no Last.fm
 ```
 
@@ -196,9 +225,21 @@ Após cada execução, você verá um relatório detalhado:
 - Tente tags mais populares como "rock", "pop", "jazz"
 - Consulte a lista de tags populares nesta documentação
 
+### Artista Não Encontrado
+
+```text
+❌ Artista 'nome_artista' não encontrado no Last.fm
+```
+
+**Solução**:
+
+- Verifique a grafia do nome do artista
+- Tente variações do nome (com/sem "The", abreviações)
+- Use nomes em inglês para artistas internacionais
+
 ### API Indisponível
 
-```
+```text
 ❌ Não foi possível conectar à API do Last.fm
 ```
 
@@ -210,7 +251,7 @@ Após cada execução, você verá um relatório detalhado:
 
 ### Nenhuma Música Encontrada
 
-```
+```text
 ❌ Nenhuma música encontrada para a tag 'tag_inexistente'
 ```
 

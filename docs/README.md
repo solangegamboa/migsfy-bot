@@ -267,6 +267,8 @@ make telegram-bot
 # Exemplo: /search Artista - Música
 # Exemplo: /album Pink Floyd - The Dark Side of the Moon
 # Exemplo: /spotify https://open.spotify.com/playlist/ID
+# Exemplo: /lastfm_tag rock 25
+# Exemplo: /lastfm_artist "Pink Floyd" 30
 ```
 
 ### 🏢 Configuração para Grupos e Threads:
