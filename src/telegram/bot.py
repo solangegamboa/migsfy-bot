@@ -343,6 +343,11 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 `/spotify <url> limit=10` - Limita downloads
 `/spotify <url> remove=yes` - Remove da playlist
 
+**Last.fm:**
+`/lastfm_tag <tag>` - Baixa as 25 músicas mais populares de uma tag
+`/lastfm_tag <tag> <número>` - Especifica quantidade de músicas
+Exemplo: `/lastfm_tag rock alternativo 50`
+
 **Histórico:**
 `/history` - Ver downloads
 `/clear_history` - Limpar histórico
@@ -1645,6 +1650,7 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
         application.add_handler(CommandHandler("clear_history", self.clear_history_command))
         application.add_handler(CommandHandler("tasks", self.tasks_command))
         application.add_handler(CommandHandler("info", self.info_command))
+        application.add_handler(CommandHandler("lastfm_tag", self.lastfm_tag_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback_query))
         
         # Adiciona handler de erro
