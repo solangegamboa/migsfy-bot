@@ -2,6 +2,7 @@
 slskd-api>=0.1.5
 python-dotenv>=1.0.0
 spotipy>=2.22.0
+pylast>=5.0.0
 
 # Optional dependencies for enhanced functionality
 music-tag>=0.4.3
