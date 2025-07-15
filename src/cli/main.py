@@ -1807,6 +1807,13 @@ def main():
     print("   --playlist URL --remove-from-playlist : Remove da playlist após download")
     print("   --playlist URL --no-auto-cleanup : Desabilita limpeza automática de downloads")
     print("   --playlist URL --auto --limit N --no-skip --remove-from-playlist : Combina opções")
+    print()
+    print("🏷️ Comandos Last.fm:")
+    print("   --lastfm-tag \"tag\" : Baixa músicas populares de uma tag")
+    print("   --lastfm-tag \"rock\" --limit 25 : Limita a 25 músicas")
+    print("   --lastfm-tag \"jazz\" --output-dir ./jazz : Salva em diretório específico")
+    print("   --lastfm-tag \"pop\" --no-skip-existing : Inclui duplicatas")
+    print()
     print("🧹 Limpeza de downloads:")
     print("   --cleanup          : Remove downloads completados da fila")
     print("   --monitor          : Monitora e limpa downloads automaticamente")
@@ -2025,6 +2032,65 @@ def main():
                     print(f"💡 Para limpar downloads completados manualmente, use --cleanup")
             else:
                 print(f"\n❌ Nenhum MP3 adequado encontrado")
+            return
+        
+        # Comando para download por tag do Last.fm
+        elif first_arg == '--lastfm-tag' and len(sys.argv) > 2:
+            # Importar função do Last.fm
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+            from core.lastfm.tag_downloader import download_tracks_by_tag
+            
+            tag_name = sys.argv[2]
+            
+            # Processar argumentos opcionais
+            limit = 25  # padrão
+            output_dir = None
+            skip_existing = True
+            
+            # Verificar argumentos adicionais
+            for i, arg in enumerate(sys.argv[3:], 3):
+                if arg == '--limit' and i + 1 < len(sys.argv):
+                    try:
+                        limit = int(sys.argv[i + 1])
+                    except ValueError:
+                        print("⚠️ Valor inválido para --limit, usando padrão (25)")
+                elif arg == '--output-dir' and i + 1 < len(sys.argv):
+                    output_dir = sys.argv[i + 1]
+                elif arg == '--no-skip-existing':
+                    skip_existing = False
+            
+            print(f"🏷️ Baixando músicas populares da tag '{tag_name}' (limite: {limit})")
+            if output_dir:
+                print(f"📁 Diretório de saída: {output_dir}")
+            if not skip_existing:
+                print("🔄 Incluindo músicas já baixadas anteriormente")
+            
+            try:
+                result = download_tracks_by_tag(
+                    tag_name=tag_name,
+                    limit=limit,
+                    output_dir=output_dir,
+                    skip_existing=skip_existing
+                )
+                
+                if result is None:
+                    print(f"\n❌ Falha na autenticação ou configuração do Last.fm")
+                    print(f"💡 Verifique suas credenciais no arquivo .env:")
+                    print(f"   - LASTFM_API_KEY")
+                    print(f"   - LASTFM_API_SECRET")
+                    print(f"💡 Obtenha suas credenciais em: https://www.last.fm/api/account/create")
+                    return
+                
+                total, successful, failed, skipped = result
+                
+                print(f"\n📊 RELATÓRIO FINAL - Tag: '{tag_name}'")
+                print(f"✅ Downloads bem-sucedidos: {successful}")
+                print(f"❌ Downloads com falha: {failed}")
+                print(f"⏭️ Músicas puladas: {skipped}")
+                print(f"📊 Total processado: {total}")
+                
+            except Exception as e:
+                print(f"❌ Erro ao processar tag '{tag_name}': {e}")
             return
     
     slskd = connectToSlskd()

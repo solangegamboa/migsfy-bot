@@ -97,14 +97,17 @@ def get_top_tracks_by_tag(tag_name, limit=25):
         
     Returns:
         list: Lista de tuplas (artista, título) das músicas mais populares
+        None: Se houver erro de autenticação ou API indisponível
     """
     # Tentar usar a API do Last.fm
     network = get_lastfm_network()
     
-    # Se não conseguir conectar à API, usar dados mockados para testes
+    # Se não conseguir conectar à API, retornar erro
     if not network:
-        logger.warning("Usando dados mockados para testes (API do Last.fm indisponível)")
-        return _get_mock_tracks_for_tag(tag_name, limit)
+        logger.error("❌ Não foi possível conectar à API do Last.fm")
+        logger.error("💡 Verifique suas credenciais LASTFM_API_KEY e LASTFM_API_SECRET no arquivo .env")
+        logger.error("💡 Obtenha suas credenciais em: https://www.last.fm/api/account/create")
+        return None
     
     try:
         # Obter a tag
@@ -125,195 +128,26 @@ def get_top_tracks_by_tag(tag_name, limit=25):
     
     except pylast.WSError as e:
         if "Tag not found" in str(e):
-            logger.error(f"Tag '{tag_name}' não encontrada no Last.fm")
+            logger.error(f"❌ Tag '{tag_name}' não encontrada no Last.fm")
+            logger.error("💡 Tente tags populares como: rock, pop, jazz, metal, alternative rock")
         else:
-            logger.error(f"Erro na API do Last.fm: {e}")
-        # Fallback para dados mockados
-        return _get_mock_tracks_for_tag(tag_name, limit)
+            logger.error(f"❌ Erro na API do Last.fm: {e}")
+            if "Invalid API key" in str(e) or "Invalid method signature" in str(e):
+                logger.error("💡 Verifique suas credenciais LASTFM_API_KEY e LASTFM_API_SECRET no arquivo .env")
+        return None
     except pylast.PyLastError as e:
-        logger.error(f"Erro ao acessar a API do Last.fm: {e}")
-        # Fallback para dados mockados
-        return _get_mock_tracks_for_tag(tag_name, limit)
+        logger.error(f"❌ Erro ao acessar a API do Last.fm: {e}")
+        return None
     except Exception as e:
-        logger.error(f"Erro inesperado: {e}")
-        # Fallback para dados mockados
-        return _get_mock_tracks_for_tag(tag_name, limit)
+        logger.error(f"❌ Erro inesperado: {e}")
+        return None
 
-def _get_mock_tracks_for_tag(tag_name, limit=25):
-    """
-    Retorna uma lista mockada de músicas para uma tag específica.
-    Usado quando a API do Last.fm não está disponível.
-    
-    Args:
-        tag_name (str): Nome da tag
-        limit (int): Número máximo de músicas para retornar
-        
-    Returns:
-        list: Lista de tuplas (artista, título) das músicas
-    """
-    # Dicionário de músicas populares por tag
-    mock_data = {
-        "rock": [
-            ("Queen", "Bohemian Rhapsody"),
-            ("Led Zeppelin", "Stairway to Heaven"),
-            ("Pink Floyd", "Comfortably Numb"),
-            ("The Beatles", "Hey Jude"),
-            ("AC/DC", "Back in Black"),
-            ("Guns N' Roses", "Sweet Child o' Mine"),
-            ("Nirvana", "Smells Like Teen Spirit"),
-            ("The Rolling Stones", "Paint It Black"),
-            ("Eagles", "Hotel California"),
-            ("Metallica", "Nothing Else Matters"),
-            ("Deep Purple", "Smoke on the Water"),
-            ("The Who", "Baba O'Riley"),
-            ("Bon Jovi", "Livin' on a Prayer"),
-            ("Aerosmith", "Dream On"),
-            ("Lynyrd Skynyrd", "Sweet Home Alabama"),
-            ("The Doors", "Riders on the Storm"),
-            ("Creedence Clearwater Revival", "Fortunate Son"),
-            ("Queen", "We Will Rock You"),
-            ("Black Sabbath", "Paranoid"),
-            ("Jimi Hendrix", "All Along the Watchtower"),
-            ("Bruce Springsteen", "Born to Run"),
-            ("The Police", "Every Breath You Take"),
-            ("U2", "With or Without You"),
-            ("Fleetwood Mac", "Go Your Own Way"),
-            ("Red Hot Chili Peppers", "Under the Bridge")
-        ],
-        "pop": [
-            ("Michael Jackson", "Billie Jean"),
-            ("Madonna", "Like a Prayer"),
-            ("Whitney Houston", "I Will Always Love You"),
-            ("ABBA", "Dancing Queen"),
-            ("Britney Spears", "Baby One More Time"),
-            ("Beyoncé", "Crazy in Love"),
-            ("Taylor Swift", "Shake It Off"),
-            ("Adele", "Rolling in the Deep"),
-            ("Ed Sheeran", "Shape of You"),
-            ("Katy Perry", "Roar"),
-            ("Lady Gaga", "Bad Romance"),
-            ("Justin Bieber", "Sorry"),
-            ("Rihanna", "Umbrella"),
-            ("Bruno Mars", "Uptown Funk"),
-            ("Ariana Grande", "Thank U, Next"),
-            ("The Weeknd", "Blinding Lights"),
-            ("Dua Lipa", "Don't Start Now"),
-            ("Mariah Carey", "All I Want for Christmas Is You"),
-            ("Elton John", "Tiny Dancer"),
-            ("Prince", "Purple Rain"),
-            ("George Michael", "Careless Whisper"),
-            ("Cyndi Lauper", "Girls Just Want to Have Fun"),
-            ("Backstreet Boys", "I Want It That Way"),
-            ("Spice Girls", "Wannabe"),
-            ("Justin Timberlake", "Can't Stop the Feeling!")
-        ],
-        "jazz": [
-            ("Miles Davis", "So What"),
-            ("John Coltrane", "Giant Steps"),
-            ("Dave Brubeck", "Take Five"),
-            ("Louis Armstrong", "What a Wonderful World"),
-            ("Duke Ellington", "Take the A Train"),
-            ("Thelonious Monk", "Round Midnight"),
-            ("Charlie Parker", "Ornithology"),
-            ("Ella Fitzgerald", "Summertime"),
-            ("Billie Holiday", "Strange Fruit"),
-            ("Herbie Hancock", "Cantaloupe Island"),
-            ("Chet Baker", "My Funny Valentine"),
-            ("Nina Simone", "Feeling Good"),
-            ("Dizzy Gillespie", "A Night in Tunisia"),
-            ("Bill Evans", "Waltz for Debby"),
-            ("Stan Getz", "The Girl from Ipanema"),
-            ("Wes Montgomery", "Four on Six"),
-            ("Charles Mingus", "Goodbye Pork Pie Hat"),
-            ("Art Blakey", "Moanin'"),
-            ("Sonny Rollins", "St. Thomas"),
-            ("Oscar Peterson", "C Jam Blues"),
-            ("Cannonball Adderley", "Mercy, Mercy, Mercy"),
-            ("Sarah Vaughan", "Misty"),
-            ("Wynton Marsalis", "Black Codes"),
-            ("Pat Metheny", "Bright Size Life"),
-            ("Diana Krall", "The Look of Love")
-        ],
-        "metal": [
-            ("Metallica", "Master of Puppets"),
-            ("Black Sabbath", "Iron Man"),
-            ("Iron Maiden", "The Number of the Beast"),
-            ("Judas Priest", "Breaking the Law"),
-            ("Slayer", "Raining Blood"),
-            ("Megadeth", "Symphony of Destruction"),
-            ("Pantera", "Walk"),
-            ("Dio", "Holy Diver"),
-            ("Motörhead", "Ace of Spades"),
-            ("Slipknot", "Duality"),
-            ("System of a Down", "Chop Suey!"),
-            ("Rammstein", "Du Hast"),
-            ("Tool", "Schism"),
-            ("Dream Theater", "Pull Me Under"),
-            ("Opeth", "Blackwater Park"),
-            ("Lamb of God", "Redneck"),
-            ("Mastodon", "Blood and Thunder"),
-            ("Gojira", "Flying Whales"),
-            ("Meshuggah", "Bleed"),
-            ("Nightwish", "Wishmaster"),
-            ("Blind Guardian", "Mirror Mirror"),
-            ("Children of Bodom", "Downfall"),
-            ("In Flames", "Cloud Connected"),
-            ("Amon Amarth", "Twilight of the Thunder God"),
-            ("Sabaton", "Ghost Division")
-        ],
-        "alternative rock": [
-            ("Radiohead", "Creep"),
-            ("Nirvana", "Come as You Are"),
-            ("The Cure", "Just Like Heaven"),
-            ("R.E.M.", "Losing My Religion"),
-            ("Pearl Jam", "Black"),
-            ("Red Hot Chili Peppers", "Californication"),
-            ("Pixies", "Where Is My Mind?"),
-            ("Soundgarden", "Black Hole Sun"),
-            ("The Smiths", "There Is a Light That Never Goes Out"),
-            ("Sonic Youth", "Teen Age Riot"),
-            ("Beck", "Loser"),
-            ("Smashing Pumpkins", "1979"),
-            ("Weezer", "Buddy Holly"),
-            ("Foo Fighters", "Everlong"),
-            ("Rage Against the Machine", "Killing in the Name"),
-            ("Jane's Addiction", "Been Caught Stealing"),
-            ("Stone Temple Pilots", "Plush"),
-            ("Alice in Chains", "Man in the Box"),
-            ("Oasis", "Wonderwall"),
-            ("Blur", "Song 2"),
-            ("The White Stripes", "Seven Nation Army"),
-            ("The Strokes", "Last Nite"),
-            ("Arctic Monkeys", "Do I Wanna Know?"),
-            ("Muse", "Supermassive Black Hole"),
-            ("Arcade Fire", "Wake Up")
-        ]
-    }
-    
-    # Normalizar a tag para comparação
-    normalized_tag = tag_name.lower()
-    
-    # Procurar a tag mais próxima
-    if normalized_tag in mock_data:
-        tracks = mock_data[normalized_tag]
-    else:
-        # Tentar encontrar uma tag parcial
-        for tag in mock_data:
-            if tag in normalized_tag or normalized_tag in tag:
-                tracks = mock_data[tag]
-                logger.info(f"Usando dados mockados para tag similar: '{tag}'")
-                break
-        else:
-            # Se não encontrar, usar rock como padrão
-            tracks = mock_data["rock"]
-            logger.info(f"Tag '{tag_name}' não encontrada, usando 'rock' como padrão")
-    
-    # Limitar o número de músicas
-    return tracks[:limit]
+
 
 def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=True):
     """
     Baixa as músicas mais populares de uma tag do Last.fm.
+    Força o download apenas de tracks individuais, nunca álbuns completos.
     
     Args:
         tag_name (str): Nome da tag (ex: "rock alternativo")
@@ -328,7 +162,16 @@ def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=Tr
     import sys
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
-    from cli.main import smart_mp3_search, is_duplicate_download, connectToSlskd
+    from cli.main import (
+        is_duplicate_download, 
+        connectToSlskd,
+        create_search_variations,
+        wait_for_search_completion,
+        find_best_mp3,
+        smart_download_with_fallback,
+        add_to_download_history,
+        smart_mp3_search
+    )
     
     # Conectar ao SLSKD
     slskd = connectToSlskd()
@@ -345,6 +188,11 @@ def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=Tr
     # Obter as músicas mais populares para a tag
     logger.info(f"Obtendo as {limit} músicas mais populares para a tag '{tag_name}'...")
     top_tracks = get_top_tracks_by_tag(tag_name, limit)
+    
+    if top_tracks is None:
+        logger.error(f"Falha na autenticação ou configuração do Last.fm")
+        os.chdir(original_dir)
+        return None
     
     if not top_tracks:
         logger.error(f"Nenhuma música encontrada para a tag '{tag_name}'")
@@ -376,7 +224,7 @@ def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=Tr
         logger.info(f"[{i}/{len(top_tracks)}] Baixando '{query}'")
         
         try:
-            # Chamar a função de busca e download
+            # Usar busca inteligente para tracks individuais
             result = smart_mp3_search(slskd, query)
             if result:
                 successful += 1
@@ -402,3 +250,132 @@ def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=Tr
     os.chdir(original_dir)
     
     return (len(top_tracks), successful, failed, skipped)
+
+def _search_single_track_only(slskd, query):
+    """
+    Busca e baixa apenas uma track individual, nunca álbuns completos.
+    Esta função força o download de tracks unitárias, ignorando detecção de álbuns.
+    
+    Args:
+        slskd: Cliente SLSKD conectado
+        query (str): Query de busca no formato "Artista - Título"
+        
+    Returns:
+        bool: True se o download foi bem-sucedido, False caso contrário
+    """
+    logger.info(f"🎯 Busca forçada por TRACK INDIVIDUAL: '{query}'")
+    
+    # Importar funções necessárias localmente para evitar problemas de importação circular
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+    from cli.main import (
+        create_search_variations,
+        wait_for_search_completion,
+        find_best_mp3,
+        smart_download_with_fallback,
+        add_to_download_history,
+        extract_artist_and_song
+    )
+    
+    # Extrair artista e música
+    artist, song = extract_artist_and_song(query)
+    if artist and song:
+        logger.info(f"🎤 Artista: '{artist}' | 🎵 Música: '{song}'")
+    
+    # Criar variações de busca
+    variations = create_search_variations(query)
+    logger.info(f"📝 {len(variations)} variações criadas para track individual")
+    
+    for i, search_term in enumerate(variations, 1):
+        logger.info(f"📍 Tentativa {i}/{len(variations)}: '{search_term}'")
+        
+        try:
+            logger.info(f"🔍 Buscando track: '{search_term}'")
+            
+            # Executar busca
+            search_result = slskd.searches.search_text(search_term)
+            search_id = search_result.get('id')
+            
+            # Aguardar conclusão da busca
+            search_responses = wait_for_search_completion(slskd, search_id, max_wait=int(os.getenv('SEARCH_WAIT_TIME', 25)))
+            
+            if not search_responses:
+                logger.warning("❌ Nenhuma resposta")
+                continue
+            
+            # Contar total de arquivos encontrados
+            total_files = sum(len(response.get('files', [])) for response in search_responses)
+            logger.info(f"📊 Total de arquivos encontrados: {total_files}")
+            
+            if total_files == 0:
+                continue
+            
+            # Score mínimo configurável (mais baixo para tracks individuais)
+            min_score = int(os.getenv('MIN_MP3_SCORE', 10))
+            
+            # Procurar o melhor arquivo MP3 individual
+            best_file, best_user, best_score = find_best_mp3(search_responses, query)
+            
+            if best_file and best_score > min_score:
+                logger.info(f"🎵 Melhor track encontrada (score: {best_score:.1f}):")
+                logger.info(f"   👤 Usuário: {best_user}")
+                logger.info(f"   📄 Arquivo: {best_file.get('filename')}")
+                logger.info(f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB")
+                logger.info(f"   🎧 Bitrate: {best_file.get('bitRate', 0)} kbps")
+                
+                # Verificar se o arquivo parece ser de um álbum completo
+                filename = best_file.get('filename', '').lower()
+                
+                # Indicadores de que pode ser parte de um álbum
+                album_indicators = [
+                    'full album', 'complete album', 'entire album', 'whole album',
+                    'discography', 'collection', 'anthology', 'greatest hits',
+                    'best of', 'compilation', 'box set'
+                ]
+                
+                # Se o nome do arquivo contém indicadores de álbum, pular
+                is_album_file = any(indicator in filename for indicator in album_indicators)
+                
+                # Também verificar se o diretório contém muitos arquivos (possível álbum)
+                directory_path = os.path.dirname(best_file.get('filename', ''))
+                files_in_same_dir = []
+                
+                for response in search_responses:
+                    if response.get('username') == best_user:
+                        for file_info in response.get('files', []):
+                            file_dir = os.path.dirname(file_info.get('filename', ''))
+                            if file_dir == directory_path and file_info.get('filename', '').lower().endswith('.mp3'):
+                                files_in_same_dir.append(file_info)
+                
+                # Se há muitos arquivos no mesmo diretório, pode ser um álbum
+                if len(files_in_same_dir) > 8:  # Mais de 8 tracks no mesmo diretório = provável álbum
+                    logger.warning(f"⚠️ Possível álbum detectado ({len(files_in_same_dir)} tracks no mesmo diretório)")
+                    logger.info(f"🎯 Forçando download apenas da track individual: '{query}'")
+                
+                if is_album_file:
+                    logger.warning(f"⚠️ Arquivo parece ser álbum completo, pulando: {filename}")
+                    continue
+                
+                # Tentar download da track individual
+                success = smart_download_with_fallback(slskd, search_responses, best_file, best_user, query)
+                if success:
+                    logger.info(f"✅ Track individual baixada com sucesso: '{search_term}'!")
+                    # Adicionar ao histórico
+                    add_to_download_history(query)
+                    return True
+                else:
+                    logger.warning(f"❌ Falha no download da track individual")
+            else:
+                logger.warning(f"❌ Nenhuma track adequada encontrada (melhor score: {best_score:.1f})")
+            
+            # Pausa entre tentativas
+            if i < len(variations):
+                logger.info("⏸️ Pausa entre buscas...")
+                time.sleep(2)
+                
+        except Exception as e:
+            logger.error(f"❌ Erro na busca da track: {e}")
+    
+    logger.warning(f"❌ Não foi possível baixar a track individual: '{query}'")
+    return False

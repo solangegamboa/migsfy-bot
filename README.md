@@ -1,6 +1,6 @@
 # SLSKD MP3 Search & Download Tool
 
-Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) com integração ao Spotify e bot do Telegram.
+Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) com integração ao Spotify, Last.fm e bot do Telegram.
 
 ## 🚀 Início Rápido
 
@@ -31,6 +31,7 @@ A documentação completa está organizada na pasta `docs/`:
 
 - **[📚 Documentação Principal](docs/README.md)** - Guia completo de uso
 - **[🤖 Bot do Telegram](docs/TELEGRAM/)** - Configuração e uso do bot
+- **[🏷️ Integração Last.fm](docs/LASTFM/)** - Descoberta de música por tags
 - **[🐳 Docker](docs/DOCKER/)** - Instalação e configuração Docker
 - **[📝 Changelogs](docs/CHANGELOG/)** - Histórico de mudanças
 
@@ -46,6 +47,9 @@ python3 src/cli/main.py --album "Artista - Álbum"
 
 # Baixar playlist Spotify
 python3 src/cli/main.py --playlist "URL_PLAYLIST"
+
+# Baixar por tag Last.fm
+python3 src/cli/main.py --lastfm-tag "rock" --limit 25
 ```
 
 ### Bot do Telegram

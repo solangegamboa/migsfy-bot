@@ -1,0 +1,26 @@
+{
+  "enabled": true,
+  "name": "Source Documentation Sync",
+  "description": "Monitors Python source files, tests, configuration files, and scripts for changes and automatically updates documentation in README.md and docs/ folder",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.py",
+      "tests/**/*.py",
+      "*.py",
+      "scripts/*.sh",
+      "requirements.txt",
+      "Dockerfile",
+      "docker-compose.yml",
+      "Makefile",
+      "pytest.ini",
+      "config/**/*",
+      ".env.example"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Source code, tests, or configuration files have been modified in this Python project. Please review the changes and update the documentation to keep it synchronized. Focus on:\n\n1. **README.md Updates**: Update if there are changes to:\n   - Core functionality or features\n   - Installation or setup instructions\n   - Usage examples or CLI commands\n   - Dependencies or requirements\n   - Configuration options\n\n2. **docs/ Folder Updates**: Update relevant documentation files if changes affect:\n   - Telegram bot functionality (docs/TELEGRAM/)\n   - Docker setup or deployment (docs/DOCKER/)\n   - Feature changes that need changelog entries (docs/CHANGELOG/)\n   - General project documentation (docs/README.md)\n\n3. **Specific Areas to Check**:\n   - API integrations (Spotify, Last.fm, SLSKD)\n   - Bot commands and handlers\n   - CLI interface changes\n   - Configuration file changes\n   - New dependencies or environment variables\n   - Testing procedures or new test categories\n\n4. **Documentation Standards**:\n   - Keep code examples up to date\n   - Update any command-line usage examples\n   - Ensure environment variable documentation matches .env.example\n   - Update Docker instructions if containerization changes\n\nPlease analyze the modified files and determine what documentation updates are needed to maintain accuracy and completeness."
+  }
+}

@@ -1,6 +1,6 @@
 # SLSKD MP3 Search & Download Tool
 
-Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) com integração ao Spotify.
+Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) com integração ao Spotify e Last.fm.
 
 ## 🚀 Funcionalidades
 
@@ -17,6 +17,7 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
 - **🎵 Integração Spotify**: Baixa playlists completas do Spotify automaticamente
 - **🗑️ Remoção automática**: Remove músicas da playlist após encontrá-las para download
 - **🤖 Bot do Telegram**: Controle remoto via Telegram para busca e download
+- **🏷️ Integração Last.fm**: Descoberta de música por tags e download automático
 
 ## 📋 Pré-requisitos
 
@@ -103,6 +104,19 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
    - Configure Redirect URI: `http://localhost:8888/callback`
    - Copie Client ID e Client Secret para o .env
 
+6. **🏷️ Configurar Last.fm (opcional)**:
+   - Acesse [Last.fm API](https://www.last.fm/api/account/create)
+   - Crie uma conta de API
+   - Obtenha API Key e Shared Secret
+   - Adicione as credenciais ao .env:
+   ```env
+   LASTFM_API_KEY=sua_api_key_aqui
+   LASTFM_API_SECRET=seu_shared_secret_aqui
+   # Opcionais para autenticação de usuário:
+   LASTFM_USERNAME=seu_usuario_lastfm
+   LASTFM_PASSWORD=sua_senha_lastfm
+   ```
+
 ## 🎵 Uso
 
 ### Busca básica:
@@ -155,6 +169,23 @@ python3 slskd-mp3-search.py --remove "Artista - Música"
 
 # Limpar todo o histórico
 python3 slskd-mp3-search.py --clear-history
+```
+
+### 🏷️ Comandos Last.fm:
+```bash
+# Baixar músicas populares por tag
+python3 src/cli/main.py --lastfm-tag "rock" --limit 25
+
+# Baixar músicas de diferentes gêneros
+python3 src/cli/main.py --lastfm-tag "jazz" --limit 10
+python3 src/cli/main.py --lastfm-tag "alternative rock" --limit 15
+python3 src/cli/main.py --lastfm-tag "metal" --limit 20
+
+# Baixar para diretório específico
+python3 src/cli/main.py --lastfm-tag "pop" --limit 30 --output-dir "./downloads/pop"
+
+# Incluir músicas já baixadas (não pular duplicatas)
+python3 src/cli/main.py --lastfm-tag "rock" --no-skip-existing
 ```
 
 ### 🎵 Comandos Spotify:
@@ -249,6 +280,10 @@ Veja [README-Telegram-Groups.md](README-Telegram-Groups.md) para configuração 
 | `SPOTIFY_CLIENT_ID` | Client ID do Spotify | - |
 | `SPOTIFY_CLIENT_SECRET` | Client Secret do Spotify | - |
 | `SPOTIFY_REDIRECT_URI` | URI de redirecionamento | http://localhost:8888/callback |
+| `LASTFM_API_KEY` | Chave da API do Last.fm | - |
+| `LASTFM_API_SECRET` | Secret da API do Last.fm | - |
+| `LASTFM_USERNAME` | Nome de usuário Last.fm (opcional) | - |
+| `LASTFM_PASSWORD` | Senha do Last.fm (opcional) | - |
 | `TELEGRAM_BOT_TOKEN` | Token do bot do Telegram | - |
 | `TELEGRAM_ALLOWED_USERS` | IDs dos usuários autorizados | - |
 | `TELEGRAM_ALLOWED_GROUPS` | IDs dos grupos autorizados | - |
@@ -292,6 +327,13 @@ Veja [README-Telegram-Groups.md](README-Telegram-Groups.md) para configuração 
    - Suporte a playlists públicas e privadas (com autenticação)
    - Preview antes de baixar
    - Controle de limite e duplicatas
+
+7. **🏷️ Integração Last.fm**:
+   - Descobre músicas populares por tags/gêneros
+   - Suporte a tags em português e inglês
+   - Requer credenciais válidas da API Last.fm
+   - Download automático de tracks individuais (nunca álbuns completos)
+   - Organização automática por diretórios de tag
 
 ## 🛠️ Funções úteis
 

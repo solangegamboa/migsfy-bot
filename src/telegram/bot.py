@@ -345,13 +345,13 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 `/spotify <url> remove=yes` - Remove da playlist
 
 **Last.fm:**
-`/lastfm_tag <tag>` - Baixa as 25 músicas mais populares de uma tag
+`/lastfm_tag <tag>` - Baixa automaticamente as 25 músicas mais populares de uma tag
 `/lastfm_tag <tag> <número>` - Especifica quantidade de músicas (máx: 100)
 Exemplos:
-• `/lastfm_tag rock alternativo` - 25 músicas mais populares
-• `/lastfm_tag jazz 50` - 50 músicas mais populares
-• `/lastfm_tag metal 10` - 10 músicas mais populares
-_Obs: Músicas já baixadas anteriormente serão puladas_
+• `/lastfm_tag rock alternativo` - 25 músicas mais populares (automático)
+• `/lastfm_tag jazz 50` - 50 músicas mais populares (automático)
+• `/lastfm_tag metal 10` - 10 músicas mais populares (automático)
+_Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente automático - não pergunta nada!_
 
 **Histórico:**
 `/history` - Ver downloads
@@ -456,13 +456,13 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
             await update.message.reply_text(
                 "❌ **Comando Incompleto**\n\n"
                 "**Uso do comando:**\n"
-                "`/lastfm_tag <tag>` - Baixa as 25 músicas mais populares\n"
+                "`/lastfm_tag <tag>` - Baixa automaticamente as 25 músicas mais populares\n"
                 "`/lastfm_tag <tag> <número>` - Especifica quantidade (máx: 100)\n\n"
                 "**Exemplos:**\n"
-                "• `/lastfm_tag rock alternativo` - 25 músicas mais populares\n"
-                "• `/lastfm_tag jazz 50` - 50 músicas mais populares\n\n"
-                "**Tags populares:** rock, pop, jazz, metal, indie, electronic, hip-hop, classical\n"
-                "_Músicas já baixadas anteriormente serão puladas automaticamente_",
+                "• `/lastfm_tag rock alternativo` - 25 músicas mais populares (automático)\n"
+                "• `/lastfm_tag jazz 50` - 50 músicas mais populares (automático)\n\n"
+                "**Tags populares:** rock, pop, jazz, metal, indie, electronic, hip-hop, classical\n\n"
+                "🤖 **Processo automático:** As primeiras músicas que não estão no seu histórico serão baixadas diretamente, sem perguntar nada!",
                 parse_mode='Markdown'
             )
             return
@@ -486,10 +486,11 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
         
         # Informar ao usuário que o processo começou
         status_message = await update.message.reply_text(
-            f"🔍 **Buscando músicas da tag \"{tag_name}\" no Last.fm**\n\n"
+            f"🔍 **Iniciando download automático da tag \"{tag_name}\"**\n\n"
             f"• Quantidade solicitada: *{limit}* músicas\n"
-            f"• Músicas já baixadas anteriormente serão puladas\n"
-            f"• As músicas serão baixadas em ordem de popularidade\n\n"
+            f"• Músicas já baixadas anteriormente serão puladas automaticamente\n"
+            f"• As primeiras {limit} músicas mais populares que não tenho serão baixadas diretamente\n"
+            f"• **Não será perguntado nada - processo totalmente automático**\n\n"
             f"_Este processo pode levar alguns minutos. Por favor, aguarde..._",
             parse_mode='Markdown'
         )
@@ -519,24 +520,40 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
             import sys
             import os
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from core.lastfm import download_tracks_by_tag
+            from core.lastfm.tag_downloader import download_tracks_by_tag
             
             # Atualizar mensagem de status
             await status_message.edit_text(
                 f"⏳ **Download iniciado: Tag \"{tag_name}\"**\n\n"
                 f"• Buscando as {limit} músicas mais populares\n"
                 f"• Verificando histórico de downloads\n"
-                f"• Preparando para baixar músicas novas\n\n"
+                f"• Baixando automaticamente as primeiras {limit} que não tenho\n\n"
                 f"_O progresso será atualizado ao finalizar. Por favor, aguarde..._",
                 parse_mode='Markdown'
             )
             
             # Executar o download em uma thread separada para não bloquear o bot
             loop = asyncio.get_event_loop()
-            total, successful, failed, skipped = await loop.run_in_executor(
+            result = await loop.run_in_executor(
                 None, 
                 lambda: download_tracks_by_tag(tag_name, limit=limit, skip_existing=True)
             )
+            
+            # Verificar se houve falha na autenticação
+            if result is None:
+                await status_message.edit_text(
+                    f"❌ **Falha na autenticação do Last.fm**\n\n"
+                    f"Não foi possível conectar à API do Last.fm.\n\n"
+                    f"**Possíveis causas:**\n"
+                    f"• Credenciais não configuradas no servidor\n"
+                    f"• API Key ou Secret inválidos\n"
+                    f"• Problema de conectividade\n\n"
+                    f"Entre em contato com o administrador do bot.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            total, successful, failed, skipped = result
             
             # Atualizar status da tarefa
             if task_id in self.active_tasks:
@@ -573,24 +590,25 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
                     status_text = "Não foi possível baixar nenhuma música"
                 elif success_rate >= 80:
                     status_emoji = "✅"
-                    status_text = "Download concluído com sucesso"
+                    status_text = "Download automático concluído com sucesso"
                 elif success_rate >= 50:
                     status_emoji = "⚠️"
-                    status_text = "Download parcialmente concluído"
+                    status_text = "Download automático parcialmente concluído"
                 else:
                     status_emoji = "⚠️"
-                    status_text = "Download com muitas falhas"
+                    status_text = "Download automático com muitas falhas"
                 
                 await status_message.edit_text(
                     f"{status_emoji} **{status_text}**\n\n"
                     f"**Tag:** {tag_name}\n"
                     f"**Tempo:** {elapsed_str}\n\n"
                     f"📊 **Estatísticas:**\n"
-                    f"• Total de músicas: {total}\n"
-                    f"• Downloads bem-sucedidos: {successful}\n"
+                    f"• Total de músicas encontradas: {total}\n"
+                    f"• Downloads iniciados automaticamente: {successful}\n"
                     f"• Downloads com falha: {failed}\n"
                     f"• Músicas puladas (já baixadas): {skipped}\n"
                     f"• Taxa de sucesso: {success_rate:.1f}%\n\n"
+                    f"✅ **Processo automático:** As primeiras {limit} músicas mais populares que não estavam no histórico foram baixadas automaticamente, sem perguntar.\n\n"
                     f"_Use /history para ver o histórico completo de downloads_",
                     parse_mode='Markdown'
                 )
