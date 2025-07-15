@@ -112,9 +112,6 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
    ```env
    LASTFM_API_KEY=sua_api_key_aqui
    LASTFM_API_SECRET=seu_shared_secret_aqui
-   # Opcionais para autenticação de usuário:
-   LASTFM_USERNAME=seu_usuario_lastfm
-   LASTFM_PASSWORD=sua_senha_lastfm
    ```
 
 ## 🎵 Uso
@@ -282,8 +279,6 @@ Veja [README-Telegram-Groups.md](README-Telegram-Groups.md) para configuração 
 | `SPOTIFY_REDIRECT_URI` | URI de redirecionamento | http://localhost:8888/callback |
 | `LASTFM_API_KEY` | Chave da API do Last.fm | - |
 | `LASTFM_API_SECRET` | Secret da API do Last.fm | - |
-| `LASTFM_USERNAME` | Nome de usuário Last.fm (opcional) | - |
-| `LASTFM_PASSWORD` | Senha do Last.fm (opcional) | - |
 | `TELEGRAM_BOT_TOKEN` | Token do bot do Telegram | - |
 | `TELEGRAM_ALLOWED_USERS` | IDs dos usuários autorizados | - |
 | `TELEGRAM_ALLOWED_GROUPS` | IDs dos grupos autorizados | - |

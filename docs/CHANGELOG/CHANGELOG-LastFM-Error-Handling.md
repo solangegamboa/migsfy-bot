@@ -15,6 +15,7 @@ Melhorias no tratamento de erros de autenticação do Last.fm com mensagens mais
 - **Orientações práticas**: Fornece instruções claras sobre quais variáveis verificar no arquivo `.env`
 - **Link direto**: Inclui link direto para criação de credenciais da API Last.fm
 - **Bot do Telegram**: Implementado tratamento similar no bot com mensagens adaptadas para usuários finais
+- **Simplificação da autenticação**: Removida autenticação de usuário (username/password), mantendo apenas API key e secret
 
 ### 📝 Mensagem de Erro Melhorada
 

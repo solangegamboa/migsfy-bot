@@ -22,7 +22,7 @@ def sanitize_filename(name):
 
 def get_lastfm_network():
     """
-    Inicializa e retorna uma conexão com a rede do Last.fm.
+    Inicializa e retorna uma conexão com a rede do Last.fm usando apenas API key e secret.
     
     Returns:
         pylast.LastFMNetwork: Objeto de conexão com a API do Last.fm
@@ -34,15 +34,15 @@ def get_lastfm_network():
     # Obter credenciais do Last.fm
     api_key = os.getenv("LASTFM_API_KEY")
     api_secret = os.getenv("LASTFM_API_SECRET")
-    username = os.getenv("LASTFM_USERNAME")
-    password = os.getenv("LASTFM_PASSWORD")
     
     if not api_key or not api_secret:
         logger.error("Credenciais do Last.fm não encontradas no arquivo .env")
+        logger.error("💡 Configure LASTFM_API_KEY e LASTFM_API_SECRET no arquivo .env")
+        logger.error("💡 Obtenha suas credenciais em: https://www.last.fm/api/account/create")
         return None
     
     try:
-        # Inicializar a rede do Last.fm sem autenticação de usuário primeiro
+        # Inicializar a rede do Last.fm apenas com API key e secret
         network = pylast.LastFMNetwork(
             api_key=api_key,
             api_secret=api_secret
@@ -51,32 +51,10 @@ def get_lastfm_network():
         # Testar a conexão com uma chamada simples
         try:
             network.get_top_tags(limit=1)
-            logger.info("Conexão básica com Last.fm API estabelecida com sucesso")
+            logger.info("Conexão com Last.fm API estabelecida com sucesso")
         except pylast.WSError as e:
             logger.error(f"API key ou secret inválidos: {e}")
             return None
-        
-        # Se chegou até aqui, a conexão básica está funcionando
-        # Agora tenta adicionar autenticação de usuário se fornecida
-        if username and password:
-            try:
-                password_hash = pylast.md5(password)
-                network = pylast.LastFMNetwork(
-                    api_key=api_key,
-                    api_secret=api_secret,
-                    username=username,
-                    password_hash=password_hash
-                )
-                # Testar autenticação de usuário
-                network.get_authenticated_user()
-                logger.info("Autenticação de usuário Last.fm bem-sucedida")
-            except pylast.WSError as e:
-                logger.warning(f"Falha na autenticação de usuário Last.fm: {e}. Usando apenas API key.")
-                # Volta para a conexão básica sem autenticação de usuário
-                network = pylast.LastFMNetwork(
-                    api_key=api_key,
-                    api_secret=api_secret
-                )
         
         return network
     

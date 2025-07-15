@@ -21,13 +21,9 @@ Adicione as seguintes variáveis ao seu arquivo `.env`:
 # Last.fm API Configuration
 LASTFM_API_KEY=sua_api_key_aqui
 LASTFM_API_SECRET=seu_shared_secret_aqui
-
-# Opcionais para autenticação de usuário:
-LASTFM_USERNAME=seu_usuario_lastfm
-LASTFM_PASSWORD=sua_senha_lastfm
 ```
 
-**Nota**: As credenciais de usuário são opcionais. Se não fornecidas, a API funcionará apenas com acesso público.
+**Nota**: Apenas API Key e Secret são necessários. A autenticação de usuário foi removida para simplificar a configuração.
 
 ## 🎵 Como Usar
 
@@ -223,7 +219,6 @@ A funcionalidade Last.fm requer configuração adequada para funcionar:
 
 - **API Key obrigatória**: Sem ela, nenhuma funcionalidade funcionará
 - **Shared Secret obrigatório**: Necessário para autenticação
-- **Credenciais de usuário opcionais**: Para funcionalidades avançadas
 - **Conexão com internet**: Para acessar a API do Last.fm
 - **Tags válidas**: Use tags existentes no Last.fm
 
