@@ -586,9 +586,6 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
                     f"_Use /history para ver o histórico completo de downloads_",
                     parse_mode='Markdown'
                 )
-                    f"- Taxa de sucesso: {success_rate:.1f}%",
-                    parse_mode='Markdown'
-                )
         
         except Exception as e:
             logger.error(f"Erro ao baixar músicas da tag '{tag_name}': {e}")
