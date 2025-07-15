@@ -113,6 +113,12 @@ Ferramenta inteligente para buscar e baixar MP3s usando slskd (SoulSeek daemon) 
    LASTFM_API_KEY=sua_api_key_aqui
    LASTFM_API_SECRET=seu_shared_secret_aqui
    ```
+   
+   **🔐 Autenticação OAuth (opcional)**:
+   - Para recursos pessoais (scrobbling, músicas curtidas, top tracks)
+   - Processo automático via navegador quando necessário
+   - Session key armazenado localmente para reutilização
+   - Teste a conexão: `python3 src/core/lastfm/oauth_auth.py`
 
 ## 🎵 Uso
 
