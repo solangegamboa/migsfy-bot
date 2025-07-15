@@ -55,6 +55,7 @@ python3 src/cli/main.py --lastfm-tag "pop" --limit 50 --output-dir "./pop-collec
 ## 🏷️ Tags Populares Suportadas
 
 ### Gêneros Principais
+
 - `rock` - Rock clássico e moderno
 - `pop` - Música pop mainstream
 - `jazz` - Jazz clássico e contemporâneo
@@ -67,6 +68,7 @@ python3 src/cli/main.py --lastfm-tag "pop" --limit 50 --output-dir "./pop-collec
 - `blues` - Blues tradicional e moderno
 
 ### Tags em Português
+
 - `rock nacional` - Rock brasileiro
 - `mpb` - Música Popular Brasileira
 - `samba` - Samba tradicional
@@ -74,6 +76,7 @@ python3 src/cli/main.py --lastfm-tag "pop" --limit 50 --output-dir "./pop-collec
 - `forró` - Forró tradicional
 
 ### Tags Específicas
+
 - `90s` - Música dos anos 90
 - `80s` - Música dos anos 80
 - `acoustic` - Música acústica
@@ -82,11 +85,11 @@ python3 src/cli/main.py --lastfm-tag "pop" --limit 50 --output-dir "./pop-collec
 
 ## ⚙️ Opções de Comando
 
-| Opção | Descrição | Exemplo |
-|-------|-----------|---------|
-| `--limit N` | Limita o número de músicas | `--limit 20` |
-| `--output-dir PATH` | Define diretório de saída | `--output-dir ./jazz` |
-| `--no-skip-existing` | Inclui músicas já baixadas | `--no-skip-existing` |
+| Opção                | Descrição                  | Exemplo               |
+| -------------------- | -------------------------- | --------------------- |
+| `--limit N`          | Limita o número de músicas | `--limit 20`          |
+| `--output-dir PATH`  | Define diretório de saída  | `--output-dir ./jazz` |
+| `--no-skip-existing` | Inclui músicas já baixadas | `--no-skip-existing`  |
 
 ## 🔧 Como Funciona
 
@@ -109,22 +112,27 @@ python3 src/cli/main.py --lastfm-tag "pop" --limit 50 --output-dir "./pop-collec
 O sistema implementa **5 camadas de verificação** para garantir que apenas tracks individuais sejam baixadas:
 
 #### Verificação 1: Análise do Nome do Arquivo
+
 - Detecta indicadores como "full album", "complete album", "discography"
 - Rejeita automaticamente arquivos com termos suspeitos
 
 #### Verificação 2: Contagem de Arquivos no Diretório
+
 - Conta arquivos MP3 no mesmo diretório do usuário
 - Rejeita se há mais de 8 arquivos (provável álbum)
 
 #### Verificação 3: Padrões de Numeração
-- Detecta padrões como "01-", "02_", "track 1", "cd1"
+
+- Detecta padrões como "01-", "02\_", "track 1", "cd1"
 - Identifica numeração sequencial típica de álbuns
 
 #### Verificação 4: Tamanho do Arquivo
+
 - Rejeita arquivos maiores que 100MB
 - Álbuns completos tendem a ser muito grandes
 
 #### Verificação 5: Duração
+
 - Rejeita arquivos com mais de 1 hora de duração
 - Indica compilações ou álbuns completos
 
@@ -157,6 +165,7 @@ Após cada execução, você verá um relatório detalhado:
 ## 🛠️ Troubleshooting
 
 ### Erro de Autenticação
+
 ```
 ❌ Falha na autenticação ou configuração do Last.fm
 💡 Verifique suas credenciais no arquivo .env:
@@ -164,37 +173,49 @@ Após cada execução, você verá um relatório detalhado:
    - LASTFM_API_SECRET
 💡 Obtenha suas credenciais em: https://www.last.fm/api/account/create
 ```
+
 **Solução**: Verifique se `LASTFM_API_KEY` e `LASTFM_API_SECRET` estão configurados corretamente no `.env`
 
 ### Erro de API Key
+
 ```
 ❌ Credenciais do Last.fm não encontradas no arquivo .env
 ```
+
 **Solução**: Verifique se `LASTFM_API_KEY` e `LASTFM_API_SECRET` estão configurados no `.env`
 
 ### Tag Não Encontrada
+
 ```
 ❌ Tag 'nome_tag' não encontrada no Last.fm
 ```
-**Solução**: 
+
+**Solução**:
+
 - Verifique a grafia da tag
 - Tente tags mais populares como "rock", "pop", "jazz"
 - Consulte a lista de tags populares nesta documentação
 
 ### API Indisponível
+
 ```
 ❌ Não foi possível conectar à API do Last.fm
 ```
-**Solução**: 
+
+**Solução**:
+
 - Verifique sua conexão com a internet
 - Confirme se as credenciais estão corretas no arquivo .env
 - Verifique se LASTFM_API_KEY e LASTFM_API_SECRET estão configurados
 
 ### Nenhuma Música Encontrada
+
 ```
 ❌ Nenhuma música encontrada para a tag 'tag_inexistente'
 ```
+
 **Solução**:
+
 - Use tags mais populares
 - Verifique se a tag existe no Last.fm
 - Tente variações da tag (inglês/português)
@@ -202,6 +223,7 @@ Após cada execução, você verá um relatório detalhado:
 ## 🎯 Dicas de Uso
 
 ### Para Descobrir Novas Músicas
+
 ```bash
 # Comece com limite baixo para testar
 python3 src/cli/main.py --lastfm-tag "indie" --limit 5
@@ -211,6 +233,7 @@ python3 src/cli/main.py --lastfm-tag "indie" --limit 25
 ```
 
 ### Para Coleções Temáticas
+
 ```bash
 # Crie coleções organizadas por década
 python3 src/cli/main.py --lastfm-tag "80s" --output-dir "./80s-hits" --limit 30
@@ -218,6 +241,7 @@ python3 src/cli/main.py --lastfm-tag "90s" --output-dir "./90s-hits" --limit 30
 ```
 
 ### Para Explorar Gêneros
+
 ```bash
 # Explore subgêneros específicos
 python3 src/cli/main.py --lastfm-tag "progressive rock" --limit 15
@@ -228,6 +252,7 @@ python3 src/cli/main.py --lastfm-tag "smooth jazz" --limit 20
 ## 🔄 Integração com Outras Funcionalidades
 
 ### Combinando com Histórico
+
 ```bash
 # Ver histórico antes de baixar
 python3 src/cli/main.py --history
@@ -240,7 +265,9 @@ python3 src/cli/main.py --force "Artista - Música"
 ```
 
 ### Limpeza Automática
+
 O sistema de limpeza automática funciona normalmente com downloads do Last.fm:
+
 - Downloads completados são removidos da fila automaticamente
 - Use `--no-auto-cleanup` se quiser controle manual
 
@@ -255,13 +282,83 @@ A funcionalidade Last.fm requer configuração adequada para funcionar:
 
 Sem essas configurações, o sistema falhará com mensagens de erro claras.
 
+## 🤖 Download Automático
+
+### Script de Automação
+
+O sistema inclui um script bash para download automático de músicas baseado em tags configuradas, ideal para descoberta musical contínua.
+
+#### Configuração
+
+Adicione as seguintes variáveis ao seu arquivo `.env`:
+
+```env
+# Tags para download automático (separadas por vírgula)
+LASTFM_AUTO_TAGS=rock,pop,jazz,alternative rock,metal,blues,electronic
+
+# Limite de músicas por tag (padrão: 15)
+LASTFM_AUTO_LIMIT=20
+
+# Diretório de saída (padrão: ./downloads/lastfm_auto)
+LASTFM_AUTO_OUTPUT_DIR=./downloads/auto
+
+# Pular músicas já baixadas (padrão: true)
+LASTFM_AUTO_SKIP_EXISTING=true
+```
+
+#### Execução Manual
+
+```bash
+# Executar uma vez para testar
+./scripts/lastfm-auto-download.sh
+
+# Monitorar logs em tempo real
+tail -f logs/lastfm_auto_download.log
+```
+
+#### Execução Automática (Cron)
+
+```bash
+# Editar crontab
+crontab -e
+
+# Executar a cada 48 horas às 2:00 AM
+0 2 */2 * * /caminho/para/projeto/scripts/lastfm-auto-download.sh
+
+# Ou diariamente às 3:00 AM
+0 3 * * * /caminho/para/projeto/scripts/lastfm-auto-download.sh
+```
+
+#### Recursos do Script
+
+- **Prevenção de Execução Simultânea**: Lock files impedem conflitos
+- **Processamento Sequencial**: Cada tag é processada individualmente
+- **Monitoramento de Recursos**: Verifica espaço em disco e tamanho dos downloads
+- **Logs Detalhados**: Relatórios completos com estatísticas por tag
+- **Rotação de Logs**: Logs grandes são rotacionados automaticamente
+- **Tratamento de Erros**: Recuperação automática de falhas temporárias
+
+#### Exemplo de Relatório
+
+```
+📊 RELATÓRIO FINAL - Download Automático Last.fm
+================================================
+🕐 Duração total: 1847s (30min)
+🏷️ Total de tags: 5
+✅ Tags processadas com sucesso: 4
+❌ Tags com falha: 1
+📁 Diretório de saída: ./downloads/lastfm_auto
+💾 Uso do disco: 45%
+📦 Tamanho total dos downloads: 2.3GB
+```
+
 ## 🚀 Próximos Passos
 
 Após configurar o Last.fm, você pode:
 
 1. **Explorar o Bot do Telegram**: Use `/lastfm rock` no bot
 2. **Combinar com Spotify**: Use playlists + tags para descoberta completa
-3. **Automatizar**: Crie scripts para baixar tags regularmente
+3. **Configurar Automação**: Use o script para descoberta musical contínua
 4. **Personalizar**: Explore diferentes tags para descobrir seus gostos musicais
 
 ---

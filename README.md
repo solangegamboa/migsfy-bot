@@ -32,6 +32,7 @@ A documentação completa está organizada na pasta `docs/`:
 - **[📚 Documentação Principal](docs/README.md)** - Guia completo de uso
 - **[🤖 Bot do Telegram](docs/TELEGRAM/)** - Configuração e uso do bot
 - **[🏷️ Integração Last.fm](docs/LASTFM/)** - Descoberta de música por tags
+  - **[🤖 Download Automático](docs/LASTFM/README-Auto-Download.md)** - Automação via cron
 - **[🐳 Docker](docs/DOCKER/)** - Instalação e configuração Docker
 - **[📝 Changelogs](docs/CHANGELOG/)** - Histórico de mudanças
 
@@ -50,6 +51,9 @@ python3 src/cli/main.py --playlist "URL_PLAYLIST"
 
 # Baixar por tag Last.fm
 python3 src/cli/main.py --lastfm-tag "rock" --limit 25
+
+# Download automático Last.fm (via script)
+./scripts/lastfm-auto-download.sh
 ```
 
 ### Bot do Telegram
@@ -75,6 +79,8 @@ migsfy-bot/
 ├── tests/                 # Testes
 ├── docs/                  # Documentação
 ├── scripts/               # Scripts auxiliares
+│   ├── lastfm-auto-download.sh  # Download automático Last.fm
+│   └── run-telegram-bot.sh      # Executar bot Telegram
 ├── config/                # Configurações
 └── logs/                  # Logs da aplicação
 ```

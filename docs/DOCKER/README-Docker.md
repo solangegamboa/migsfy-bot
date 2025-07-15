@@ -118,9 +118,12 @@ SPOTIFY_REDIRECT_URI=http://localhost:8888/callback
 
 O container usa os seguintes volumes para persistência:
 
-- `./data:/app/data` - Dados da aplicação
-- `./cache:/app/cache` - Cache do Spotify e temporários
+- `./data:/app/data` - Dados da aplicação e histórico de downloads
+- `./cache:/app/cache` - Cache do Spotify e arquivos temporários
+- `./logs:/app/logs` - Logs da aplicação e downloads automáticos
 - `./.env:/app/.env:ro` - Configurações (somente leitura)
+
+**Nota**: Diretórios de download (como `downloads/lastfm_auto`) são criados automaticamente conforme necessário.
 
 ## 🔧 Desenvolvimento
 

@@ -191,6 +191,19 @@ python3 src/cli/main.py --lastfm-tag "pop" --limit 30 --output-dir "./downloads/
 python3 src/cli/main.py --lastfm-tag "rock" --no-skip-existing
 ```
 
+### 🤖 Download Automático Last.fm:
+```bash
+# Executar script de automação uma vez
+./scripts/lastfm-auto-download.sh
+
+# Monitorar logs do download automático
+tail -f logs/lastfm_auto_download.log
+
+# Configurar no crontab para execução automática
+crontab -e
+# Adicionar: 0 2 */2 * * /caminho/para/projeto/scripts/lastfm-auto-download.sh
+```
+
 ### 🎵 Comandos Spotify:
 ```bash
 # Preview de playlist (sem baixar)
@@ -285,6 +298,10 @@ Veja [README-Telegram-Groups.md](README-Telegram-Groups.md) para configuração 
 | `SPOTIFY_REDIRECT_URI` | URI de redirecionamento | http://localhost:8888/callback |
 | `LASTFM_API_KEY` | Chave da API do Last.fm | - |
 | `LASTFM_API_SECRET` | Secret da API do Last.fm | - |
+| `LASTFM_AUTO_TAGS` | Tags para download automático (separadas por vírgula) | rock,pop,jazz |
+| `LASTFM_AUTO_LIMIT` | Limite de músicas por tag no download automático | 15 |
+| `LASTFM_AUTO_OUTPUT_DIR` | Diretório para downloads automáticos | ./downloads/lastfm_auto |
+| `LASTFM_AUTO_SKIP_EXISTING` | Pular músicas já baixadas no download automático | true |
 | `TELEGRAM_BOT_TOKEN` | Token do bot do Telegram | - |
 | `TELEGRAM_ALLOWED_USERS` | IDs dos usuários autorizados | - |
 | `TELEGRAM_ALLOWED_GROUPS` | IDs dos grupos autorizados | - |

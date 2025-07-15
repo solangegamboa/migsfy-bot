@@ -1,0 +1,18 @@
+# Crontab para download automático de tracks do Last.fm
+# Executa a cada 48 horas (2 dias) às 02:00
+# 
+# Formato: minuto hora dia mês dia_da_semana comando
+# 
+# Para instalar no Docker:
+# 1. Copie este arquivo para o container
+# 2. Execute: crontab /app/scripts/crontab-lastfm
+# 3. Inicie o cron: service cron start
+
+# Download automático Last.fm a cada 48 horas
+0 2 */2 * * /app/scripts/lastfm-auto-download.sh >> /app/logs/cron.log 2>&1
+
+# Limpeza de logs antigos toda segunda-feira às 03:00
+0 3 * * 1 find /app/logs -name "*.log.*" -mtime +7 -delete >> /app/logs/cron.log 2>&1
+
+# Verificação de saúde do sistema toda sexta-feira às 01:00
+0 1 * * 5 df -h /app >> /app/logs/system_health.log 2>&1 && du -sh /app/downloads >> /app/logs/system_health.log 2>&1

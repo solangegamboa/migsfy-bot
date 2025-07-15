@@ -36,6 +36,27 @@ echo "🔧 Running with PUID=$PUID and PGID=$PGID"
 mkdir -p /app/data /app/cache /app/logs
 chmod 755 /app/data /app/cache /app/logs
 
+# Setup cron for Last.fm auto downloads if configured
+if [ -f "/app/.env" ] && grep -q "LASTFM_AUTO_TAGS" /app/.env; then
+    echo "⏰ Configurando cron para downloads automáticos do Last.fm..."
+    
+    # Install crontab
+    if [ -f "/app/scripts/crontab-lastfm" ]; then
+        crontab /app/scripts/crontab-lastfm
+        echo "✅ Crontab instalado"
+    fi
+    
+    # Start cron service
+    service cron start
+    echo "🚀 Serviço cron iniciado"
+    
+    # Show next scheduled run
+    NEXT_RUN=$(crontab -l | grep lastfm-auto-download | head -1 | awk '{print $1, $2, $3, $4, $5}')
+    echo "📅 Próxima execução: $NEXT_RUN (a cada 48 horas)"
+else
+    echo "ℹ️ Cron não configurado (LASTFM_AUTO_TAGS não encontrado no .env)"
+fi
+
 # Check if .env file exists
 if [ ! -f "/app/.env" ]; then
     echo "⚠️ Warning: .env file not found!"
