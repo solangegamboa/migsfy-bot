@@ -515,7 +515,10 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
     async def _download_lastfm_tag(self, update, tag_name, limit, task_id, status_message):
         """Função assíncrona para baixar músicas de uma tag do Last.fm"""
         try:
-            # Importar o módulo Last.fm
+            # Importar o módulo Last.fm usando o caminho correto
+            import sys
+            import os
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
             from core.lastfm import download_tracks_by_tag
             
             # Atualizar mensagem de status
