@@ -495,20 +495,22 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
         )
         
         # Criar uma tarefa assíncrona para o download
-        task_id = f"lastfm_tag_{int(time.time())}"
-        task_description = f"Download de músicas da tag '{tag_name}' do Last.fm"
-        
-        # Adicionar à lista de tarefas
-        self.tasks[task_id] = {
-            "description": task_description,
-            "status": "running",
-            "start_time": datetime.now(),
-            "chat_id": update.effective_chat.id,
-            "message_id": status_message.message_id
-        }
+        self.task_counter += 1
+        task_id = f"lastfm_tag_{self.task_counter}"
         
         # Executar o download em uma thread separada
-        asyncio.create_task(self._download_lastfm_tag(update, tag_name, limit, task_id, status_message))
+        task = asyncio.create_task(self._download_lastfm_tag(update, tag_name, limit, task_id, status_message))
+        
+        # Adicionar à lista de tarefas ativas
+        self.active_tasks[task_id] = {
+            'task': task,
+            'type': 'lastfm_tag',
+            'user_id': update.effective_user.id,
+            'chat_id': update.effective_chat.id,
+            'description': f"Download de músicas da tag '{tag_name}' do Last.fm",
+            'start_time': datetime.now(),
+            'status_message': status_message
+        }
     
     async def _download_lastfm_tag(self, update, tag_name, limit, task_id, status_message):
         """Função assíncrona para baixar músicas de uma tag do Last.fm"""
@@ -534,11 +536,14 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
             )
             
             # Atualizar status da tarefa
-            self.tasks[task_id]["status"] = "completed"
-            self.tasks[task_id]["end_time"] = datetime.now()
+            if task_id in self.active_tasks:
+                self.active_tasks[task_id]['status'] = 'completed'
+                self.active_tasks[task_id]['end_time'] = datetime.now()
             
             # Calcular tempo decorrido
-            elapsed_time = self.tasks[task_id]["end_time"] - self.tasks[task_id]["start_time"]
+            start_time = self.active_tasks[task_id]['start_time'] if task_id in self.active_tasks else datetime.now()
+            end_time = self.active_tasks[task_id]['end_time'] if task_id in self.active_tasks else datetime.now()
+            elapsed_time = end_time - start_time
             elapsed_str = str(elapsed_time).split('.')[0]  # Remover microssegundos
             
             # Enviar mensagem de conclusão
@@ -591,8 +596,10 @@ _Obs: Músicas já baixadas anteriormente serão puladas_
             logger.error(f"Erro ao baixar músicas da tag '{tag_name}': {e}")
             
             # Atualizar status da tarefa
-            self.tasks[task_id]["status"] = "failed"
-            self.tasks[task_id]["end_time"] = datetime.now()
+            if task_id in self.active_tasks:
+                self.active_tasks[task_id]['status'] = 'failed'
+                self.active_tasks[task_id]['end_time'] = datetime.now()
+                self.active_tasks[task_id]['error'] = str(e)
             
             # Enviar mensagem de erro
             await status_message.edit_text(
