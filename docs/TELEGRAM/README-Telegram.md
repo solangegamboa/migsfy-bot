@@ -129,6 +129,7 @@ Para descobrir seu ID do Telegram:
 - **Busca automática**: Envie "Artista - Música" ou use `/search`
 - **Feedback em tempo real**: Mostra progresso da busca
 - **Integração completa**: Usa todas as funcionalidades do script principal
+- **Compatibilidade flexível**: Funciona com estrutura modular ou arquivo legado
 
 ### 🎵 Playlists do Spotify
 

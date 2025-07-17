@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import logging
 import time
 import re
+import importlib.util
 
 # Configurar logging
 logger = logging.getLogger('lastfm_downloader')
@@ -189,6 +190,55 @@ def _is_album_file(filename, directory_files_count=0):
     
     return False
 
+def _import_main_module():
+    """
+    Importa o módulo principal com funções necessárias.
+    
+    Returns:
+        module: Módulo importado
+    """
+    # Tentar importar do módulo CLI primeiro
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+        from cli import main
+        logger.info("✅ Módulo cli.main importado com sucesso")
+        return main
+    except ImportError as e:
+        logger.warning(f"Não foi possível importar do módulo cli.main: {e}")
+        
+        # Fallback para o arquivo antigo slskd-mp3-search.py
+        try:
+            # Procurar o arquivo no diretório raiz
+            root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
+            module_path = os.path.join(root_dir, 'slskd-mp3-search.py')
+            
+            if not os.path.exists(module_path):
+                # Tentar encontrar em outros locais comuns
+                possible_paths = [
+                    os.path.join(root_dir, 'slskd-mp3-search.py'),
+                    os.path.join(root_dir, 'src', 'slskd-mp3-search.py'),
+                    os.path.join(root_dir, 'src', 'cli', 'main.py')
+                ]
+                
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        module_path = path
+                        break
+                else:
+                    raise FileNotFoundError(f"Arquivo principal não encontrado em nenhum local comum")
+            
+            logger.info(f"Tentando importar do arquivo: {module_path}")
+            spec = importlib.util.spec_from_file_location("slskd_mp3_search", module_path)
+            slskd_module = importlib.util.module_from_spec(spec)
+            sys.modules["slskd_mp3_search"] = slskd_module
+            spec.loader.exec_module(slskd_module)
+            
+            logger.info("✅ Módulo slskd_mp3_search importado com sucesso")
+            return slskd_module
+        except Exception as e:
+            logger.error(f"❌ Erro ao importar módulo principal: {e}")
+            raise
+
 def _search_single_track_only(slskd, query):
     """
     Busca e baixa APENAS uma track individual, com verificações rigorosas contra álbuns.
@@ -204,18 +254,20 @@ def _search_single_track_only(slskd, query):
     logger.info(f"🎯 BUSCA RESTRITA A TRACK INDIVIDUAL: '{query}'")
     logger.info("🚫 ÁLBUNS SERÃO AUTOMATICAMENTE REJEITADOS")
     
-    # Importar funções necessárias localmente para evitar problemas de importação circular
-    import sys
-    import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
-    from cli.main import (
-        create_search_variations,
-        wait_for_search_completion,
-        find_best_mp3,
-        smart_download_with_fallback,
-        add_to_download_history,
-        extract_artist_and_song
-    )
+    # Importar módulo principal
+    try:
+        main_module = _import_main_module()
+        
+        # Extrair funções necessárias
+        create_search_variations = getattr(main_module, 'create_search_variations')
+        wait_for_search_completion = getattr(main_module, 'wait_for_search_completion')
+        find_best_mp3 = getattr(main_module, 'find_best_mp3')
+        smart_download_with_fallback = getattr(main_module, 'smart_download_with_fallback')
+        add_to_download_history = getattr(main_module, 'add_to_download_history')
+        extract_artist_and_song = getattr(main_module, 'extract_artist_and_song')
+    except Exception as e:
+        logger.error(f"❌ Erro ao importar funções necessárias: {e}")
+        return False
     
     # Extrair artista e música
     artist, song = extract_artist_and_song(query)
@@ -347,15 +399,16 @@ def download_tracks_by_tag(tag_name, limit=25, output_dir=None, skip_existing=Tr
     Returns:
         tuple: (total, successful, failed, skipped) contagem de downloads
     """
-    # Importar funções necessárias
-    import sys
-    import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
-    from cli.main import (
-        is_duplicate_download, 
-        connectToSlskd,
-        add_to_download_history
-    )
+    # Importar módulo principal
+    try:
+        main_module = _import_main_module()
+        
+        # Extrair funções necessárias
+        is_duplicate_download = getattr(main_module, 'is_duplicate_download')
+        connectToSlskd = getattr(main_module, 'connectToSlskd')
+    except Exception as e:
+        logger.error(f"❌ Erro ao importar funções necessárias: {e}")
+        return (0, 0, 0, 0)
     
     # Conectar ao SLSKD
     slskd = connectToSlskd()
@@ -507,15 +560,16 @@ def download_artist_top_tracks(artist_name, limit=30, output_dir=None, skip_exis
     Returns:
         tuple: (total, successful, failed, skipped) contagem de downloads
     """
-    # Importar funções necessárias
-    import sys
-    import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
-    from cli.main import (
-        is_duplicate_download, 
-        connectToSlskd,
-        add_to_download_history
-    )
+    # Importar módulo principal
+    try:
+        main_module = _import_main_module()
+        
+        # Extrair funções necessárias
+        is_duplicate_download = getattr(main_module, 'is_duplicate_download')
+        connectToSlskd = getattr(main_module, 'connectToSlskd')
+    except Exception as e:
+        logger.error(f"❌ Erro ao importar funções necessárias: {e}")
+        return (0, 0, 0, 0)
     
     # Conectar ao SLSKD
     slskd = connectToSlskd()

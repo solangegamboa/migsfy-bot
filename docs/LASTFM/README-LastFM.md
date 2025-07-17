@@ -128,6 +128,7 @@ python3 src/cli/main.py --lastfm-artist "Queen" --limit 50 --output-dir "./queen
 - Busca as músicas mais populares para a tag especificada
 - Ordena por popularidade (playcount)
 - Suporte a fallback automático entre métodos de autenticação
+- Compatibilidade com múltiplas estruturas de código (modular e legada)
 
 ### 2. Autenticação Flexível
 

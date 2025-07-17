@@ -101,6 +101,17 @@ python3 -m pytest tests/unit/
 python3 -m pytest tests/integration/
 ```
 
+## 🔄 Compatibilidade
+
+O sistema implementa um mecanismo de importação flexível que permite:
+
+- Funcionar com a estrutura modular (`src/cli/main.py`)
+- Funcionar com o arquivo legado (`slskd-mp3-search.py`)
+- Detectar automaticamente a estrutura disponível
+- Garantir compatibilidade entre diferentes versões da instalação
+
+Esta abordagem permite uma migração gradual para a nova estrutura modular sem quebrar instalações existentes.
+
 ## 📝 Licença
 
 MIT License - veja LICENSE para detalhes.

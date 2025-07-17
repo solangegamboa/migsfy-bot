@@ -1803,7 +1803,50 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
             if remove_from_playlist:
                 tracks, playlist_name = get_playlist_tracks_with_uris(self.spotify_client, playlist_id)
             else:
-                from slskd_mp3_search import get_playlist_tracks
+                # Importar a função get_playlist_tracks de forma segura
+                try:
+                    # Tentar importar do módulo CLI primeiro
+                    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cli'))
+                    from main import get_playlist_tracks
+                    logger.info("✅ Função get_playlist_tracks importada do módulo cli.main")
+                except ImportError as e:
+                    logger.warning(f"Não foi possível importar get_playlist_tracks do módulo cli.main: {e}")
+                    
+                    # Fallback para o arquivo antigo slskd-mp3-search.py
+                    try:
+                        # Procurar o arquivo no diretório raiz
+                        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+                        module_path = os.path.join(root_dir, 'slskd-mp3-search.py')
+                        
+                        if not os.path.exists(module_path):
+                            # Tentar encontrar em outros locais comuns
+                            possible_paths = [
+                                os.path.join(root_dir, 'slskd-mp3-search.py'),
+                                os.path.join(root_dir, 'src', 'slskd-mp3-search.py'),
+                                os.path.join(root_dir, 'src', 'cli', 'main.py')
+                            ]
+                            
+                            for path in possible_paths:
+                                if os.path.exists(path):
+                                    module_path = path
+                                    break
+                            else:
+                                raise FileNotFoundError(f"Arquivo principal não encontrado em nenhum local comum")
+                        
+                        logger.info(f"Tentando importar do arquivo: {module_path}")
+                        import importlib.util
+                        spec = importlib.util.spec_from_file_location("slskd_mp3_search", module_path)
+                        slskd_module = importlib.util.module_from_spec(spec)
+                        sys.modules["slskd_mp3_search"] = slskd_module
+                        spec.loader.exec_module(slskd_module)
+                        
+                        # Importar a função necessária
+                        get_playlist_tracks = slskd_module.get_playlist_tracks
+                        logger.info("✅ Função get_playlist_tracks importada do arquivo slskd-mp3-search.py")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao importar get_playlist_tracks: {e}")
+                        raise ImportError(f"Não foi possível importar get_playlist_tracks: {e}")
+                
                 tracks, playlist_name = get_playlist_tracks(self.spotify_client, playlist_id)
             
             if not tracks:
@@ -1877,13 +1920,77 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
                     pass  # Ignora erros de edição (rate limit)
                 
                 # Verifica duplicatas
-                from slskd_mp3_search import is_duplicate_download
-                if is_duplicate_download(search_term):
+                try:
+                    # Tentar usar a função já importada
+                    if is_duplicate_download(search_term):
+                        skipped_duplicates += 1
+                except NameError:
+                    # Fallback: tentar importar a função
+                    try:
+                        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+                        from cli.main import is_duplicate_download
+                    except ImportError:
+                        # Último recurso: importar do arquivo antigo
+                        import importlib.util
+                        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+                        module_path = os.path.join(root_dir, 'slskd-mp3-search.py')
+                        if not os.path.exists(module_path):
+                            raise ImportError(f"Não foi possível encontrar o módulo principal")
+                        
+                        spec = importlib.util.spec_from_file_location("slskd_mp3_search", module_path)
+                        slskd_module = importlib.util.module_from_spec(spec)
+                        sys.modules["slskd_mp3_search"] = slskd_module
+                        spec.loader.exec_module(slskd_module)
+                        is_duplicate_download = slskd_module.is_duplicate_download
+                    
+                    # Verificar duplicatas com a função importada
+                    if is_duplicate_download(search_term):
                     skipped_duplicates += 1
                     
                     # Remove da playlist se já foi baixada
                     if remove_from_playlist and self.spotify_user_client:
-                        from slskd_mp3_search import remove_track_from_playlist
+                        # Importar a função remove_track_from_playlist de forma segura
+                        try:
+                            # Tentar importar do módulo CLI primeiro
+                            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cli'))
+                            from main import remove_track_from_playlist
+                            logger.info("✅ Função remove_track_from_playlist importada do módulo cli.main")
+                        except ImportError as e:
+                            logger.warning(f"Não foi possível importar remove_track_from_playlist do módulo cli.main: {e}")
+                            
+                            # Fallback para o arquivo antigo slskd-mp3-search.py
+                            try:
+                                # Procurar o arquivo no diretório raiz
+                                root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+                                module_path = os.path.join(root_dir, 'slskd-mp3-search.py')
+                                
+                                if not os.path.exists(module_path):
+                                    # Tentar encontrar em outros locais comuns
+                                    possible_paths = [
+                                        os.path.join(root_dir, 'slskd-mp3-search.py'),
+                                        os.path.join(root_dir, 'src', 'slskd-mp3-search.py'),
+                                        os.path.join(root_dir, 'src', 'cli', 'main.py')
+                                    ]
+                                    
+                                    for path in possible_paths:
+                                        if os.path.exists(path):
+                                            module_path = path
+                                            break
+                                    else:
+                                        raise FileNotFoundError(f"Arquivo principal não encontrado em nenhum local comum")
+                                
+                                import importlib.util
+                                spec = importlib.util.spec_from_file_location("slskd_mp3_search", module_path)
+                                slskd_module = importlib.util.module_from_spec(spec)
+                                sys.modules["slskd_mp3_search"] = slskd_module
+                                spec.loader.exec_module(slskd_module)
+                                
+                                # Importar a função necessária
+                                remove_track_from_playlist = slskd_module.remove_track_from_playlist
+                                logger.info("✅ Função remove_track_from_playlist importada do arquivo slskd-mp3-search.py")
+                            except Exception as e:
+                                logger.error(f"❌ Erro ao importar remove_track_from_playlist: {e}")
+                                raise ImportError(f"Não foi possível importar remove_track_from_playlist: {e}")
                         if remove_track_from_playlist(self.spotify_user_client, playlist_id, track['uri']):
                             removed_from_playlist_count += 1
                     continue
