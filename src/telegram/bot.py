@@ -1945,7 +1945,7 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
                     
                     # Verificar duplicatas com a função importada
                     if is_duplicate_download(search_term):
-                    skipped_duplicates += 1
+                        skipped_duplicates += 1
                     
                     # Remove da playlist se já foi baixada
                     if remove_from_playlist and self.spotify_user_client:
