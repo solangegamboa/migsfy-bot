@@ -349,11 +349,13 @@ Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 `/lastfm_tag <tag> <número>` - Especifica quantidade de músicas (máx: 100)
 `/lastfm_artist <artista>` - Baixa automaticamente as 30 músicas mais populares de um artista
 `/lastfm_artist <artista> <número>` - Especifica quantidade de músicas (máx: 50)
+`/lastfm_album <url>` - Baixa automaticamente todas as faixas de um álbum via URL do Last.fm
 Exemplos:
 • `/lastfm_tag rock alternativo` - 25 músicas mais populares (automático)
 • `/lastfm_tag jazz 50` - 50 músicas mais populares (automático)
 • `/lastfm_artist Radiohead` - 30 músicas mais populares (automático)
 • `/lastfm_artist The Beatles 20` - 20 músicas mais populares (automático)
+• `/lastfm_album https://www.last.fm/music/Pink+Floyd/The+Dark+Side+of+the+Moon` - Todas as faixas do álbum (automático)
 _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente automático - não pergunta nada!_
 
 **Histórico:**
@@ -781,6 +783,192 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
                 f"• Verifique se o servidor SLSKD está online\n"
                 f"• Tente novamente mais tarde\n"
                 f"• Tente com um artista diferente",
+                parse_mode='Markdown'
+            )
+    
+    async def lastfm_album_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Comando /lastfm_album para baixar todas as músicas de um álbum do Last.fm via URL"""
+        if not self._is_authorized(update):
+            return
+        
+        if not self.slskd:
+            await update.message.reply_text("❌ SLSKD não está conectado")
+            return
+        
+        # Verificar se há argumentos
+        if not context.args:
+            await update.message.reply_text(
+                "❌ **Comando Incompleto**\n\n"
+                "**Uso do comando:**\n"
+                "`/lastfm_album <url_do_album>` - Baixa automaticamente todas as músicas do álbum\n\n"
+                "**Exemplos:**\n"
+                "• `/lastfm_album https://www.last.fm/music/Pink+Floyd/The+Dark+Side+of+the+Moon`\n"
+                "• `/lastfm_album https://www.last.fm/pt/music/Taylor+Swift/1989`\n"
+                "• `/lastfm_album https://www.last.fm/music/Radiohead/OK+Computer`\n\n"
+                "🤖 **Processo automático:** Todas as faixas do álbum que não estão no seu histórico serão baixadas diretamente, sem perguntar nada!",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Pegar a URL do álbum
+        album_url = context.args[0]
+        
+        # Validar se é uma URL do Last.fm
+        if not album_url.startswith('https://www.last.fm/'):
+            await update.message.reply_text(
+                "❌ **URL Inválida**\n\n"
+                "Por favor, forneça uma URL válida do Last.fm.\n\n"
+                "**Formato esperado:**\n"
+                "`https://www.last.fm/music/Artista/Album`\n\n"
+                "**Exemplo:**\n"
+                "`https://www.last.fm/music/Pink+Floyd/The+Dark+Side+of+the+Moon`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Extrair artista e álbum da URL
+        try:
+            # Remover parâmetros da URL e dividir
+            clean_url = album_url.split('?')[0]
+            url_parts = clean_url.split('/')
+            
+            # Encontrar a posição de 'music' na URL
+            music_index = -1
+            for i, part in enumerate(url_parts):
+                if part == 'music':
+                    music_index = i
+                    break
+            
+            if music_index == -1 or len(url_parts) < music_index + 3:
+                raise ValueError("Formato de URL inválido")
+            
+            # Extrair artista e álbum
+            artist_name = url_parts[music_index + 1].replace('+', ' ').replace('%20', ' ')
+            album_name = url_parts[music_index + 2].replace('+', ' ').replace('%20', ' ')
+            
+            if not artist_name or not album_name:
+                raise ValueError("Artista ou álbum não encontrado na URL")
+                
+        except (IndexError, ValueError) as e:
+            await update.message.reply_text(
+                "❌ **Erro ao processar URL**\n\n"
+                "Não foi possível extrair o artista e álbum da URL fornecida.\n\n"
+                "**Formato esperado:**\n"
+                "`https://www.last.fm/music/Artista/Album`\n\n"
+                "**Exemplo:**\n"
+                "`https://www.last.fm/music/Pink+Floyd/The+Dark+Side+of+the+Moon`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Informar ao usuário que o processo começou
+        status_message = await update.message.reply_text(
+            f"💿 **Iniciando download automático do álbum**\n\n"
+            f"**Artista:** {artist_name}\n"
+            f"**Álbum:** {album_name}\n\n"
+            f"• Buscando todas as faixas do álbum no Last.fm\n"
+            f"• Músicas já baixadas anteriormente serão puladas automaticamente\n"
+            f"• Todas as faixas que não tenho serão baixadas diretamente\n"
+            f"• **Não será perguntado nada - processo totalmente automático**\n\n"
+            f"_Este processo pode levar alguns minutos. Por favor, aguarde..._",
+            parse_mode='Markdown'
+        )
+        
+        # Criar uma tarefa assíncrona para o download
+        self.task_counter += 1
+        task_id = f"lastfm_album_{self.task_counter}"
+        
+        # Adicionar tarefa à lista de tarefas ativas
+        user_id = update.effective_user.id
+        if user_id not in self.active_tasks:
+            self.active_tasks[user_id] = {}
+        
+        self.active_tasks[user_id][task_id] = {
+            'type': 'lastfm_album',
+            'artist': artist_name,
+            'album': album_name,
+            'status': 'iniciando',
+            'start_time': time.time(),
+            'message_id': status_message.message_id
+        }
+        
+        # Executar download em background
+        asyncio.create_task(self._handle_lastfm_album_download(update, artist_name, album_name, task_id))
+    
+    async def _handle_lastfm_album_download(self, update: Update, artist_name: str, album_name: str, task_id: str):
+        """Processa o download das faixas de um álbum do Last.fm em background"""
+        user_id = update.effective_user.id
+        
+        try:
+            # Atualizar status da tarefa
+            if user_id in self.active_tasks and task_id in self.active_tasks[user_id]:
+                self.active_tasks[user_id][task_id]['status'] = 'baixando'
+            
+            # Importar função de download do Last.fm
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core', 'lastfm'))
+            from tag_downloader import download_album_tracks
+            
+            # Executar download
+            result = download_album_tracks(artist_name, album_name, skip_existing=True)
+            
+            # Remover tarefa da lista de ativas
+            if user_id in self.active_tasks and task_id in self.active_tasks[user_id]:
+                del self.active_tasks[user_id][task_id]
+            
+            if result is None:
+                await update.message.reply_text(
+                    f"❌ **Erro no download do álbum \"{album_name}\" de {artist_name}**\n\n"
+                    f"**Possíveis causas:**\n"
+                    f"• Álbum não encontrado no Last.fm\n"
+                    f"• Credenciais do Last.fm não configuradas\n"
+                    f"• Servidor SLSKD offline\n"
+                    f"• Problema de conectividade\n\n"
+                    f"**Dica:** Verifique se a URL do álbum está correta",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            total, successful, failed, skipped = result
+            
+            # Calcular estatísticas
+            success_rate = (successful / total * 100) if total > 0 else 0
+            
+            # Preparar mensagem de resultado
+            result_text = f"💿 **Download concluído - Álbum: {album_name}**\n\n"
+            result_text += f"**Artista:** {artist_name}\n"
+            result_text += f"**Álbum:** {album_name}\n\n"
+            result_text += f"📊 **Estatísticas:**\n"
+            result_text += f"• Total de faixas: *{total}*\n"
+            result_text += f"• ✅ Downloads bem-sucedidos: *{successful}*\n"
+            result_text += f"• ❌ Downloads com falha: *{failed}*\n"
+            result_text += f"• ⏭️ Faixas já baixadas: *{skipped}*\n"
+            result_text += f"• 📈 Taxa de sucesso: *{success_rate:.1f}%*\n\n"
+            
+            if successful > 0:
+                result_text += f"🎉 **{successful} novas faixas de \"{album_name}\" foram baixadas com sucesso!**\n\n"
+                result_text += f"📁 **Localização:** Diretório `{artist_name.replace(' ', '_')}/{album_name.replace(' ', '_')}`"
+            else:
+                result_text += f"ℹ️ **Nenhuma faixa nova foi baixada**\n\n"
+                if skipped > 0:
+                    result_text += f"Todas as {skipped} faixas já estavam no seu histórico de downloads."
+                else:
+                    result_text += f"Não foi possível baixar nenhuma faixa do álbum."
+            
+            await update.message.reply_text(result_text, parse_mode='Markdown')
+            
+        except Exception as e:
+            # Remover tarefa da lista de ativas em caso de erro
+            if user_id in self.active_tasks and task_id in self.active_tasks[user_id]:
+                del self.active_tasks[user_id][task_id]
+            
+            await update.message.reply_text(
+                f"❌ **Erro inesperado no download do álbum \"{album_name}\" de {artist_name}**\n\n"
+                f"**Erro:** `{str(e)}`\n\n"
+                f"**Possíveis soluções:**\n"
+                f"• Verifique se as credenciais do Last.fm estão configuradas\n"
+                f"• Verifique se o servidor SLSKD está online\n"
+                f"• Tente novamente mais tarde\n"
+                f"• Verifique se a URL do álbum está correta",
                 parse_mode='Markdown'
             )
     
@@ -2102,6 +2290,7 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("lastfm_tag", self.lastfm_tag_command))
         application.add_handler(CommandHandler("lastfm_artist", self.lastfm_artist_command))
+        application.add_handler(CommandHandler("lastfm_album", self.lastfm_album_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback_query))
         
         # Adiciona handler de erro

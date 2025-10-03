@@ -650,3 +650,165 @@ def download_artist_top_tracks(artist_name, limit=30, output_dir=None, skip_exis
     os.chdir(original_dir)
     
     return (len(top_tracks), successful, failed, skipped)
+
+def get_album_tracks(artist_name, album_name):
+    """
+    Obtém todas as faixas de um álbum específico do Last.fm.
+    
+    Args:
+        artist_name (str): Nome do artista
+        album_name (str): Nome do álbum
+        
+    Returns:
+        list: Lista de tuplas (artista, título) das faixas do álbum
+        None: Se houver erro de autenticação ou API indisponível
+    """
+    # Tentar usar a API do Last.fm
+    network = get_lastfm_network()
+    
+    # Se não conseguir conectar à API, retornar erro
+    if not network:
+        logger.error("❌ Não foi possível conectar à API do Last.fm")
+        logger.error("💡 Verifique suas credenciais LASTFM_API_KEY e LASTFM_API_SECRET no arquivo .env")
+        logger.error("💡 Obtenha suas credenciais em: https://www.last.fm/api/account/create")
+        return None
+    
+    try:
+        # Obter o álbum
+        album = network.get_album(artist_name, album_name)
+        
+        # Obter as faixas do álbum
+        tracks = album.get_tracks()
+        
+        # Formatar os resultados como tuplas (artista, título)
+        results = []
+        for track in tracks:
+            artist = track.get_artist().get_name()
+            title = track.get_title()
+            results.append((artist, title))
+        
+        logger.info(f"Encontradas {len(results)} faixas no álbum '{album_name}' de '{artist_name}'")
+        return results
+    
+    except pylast.WSError as e:
+        if "Album not found" in str(e):
+            logger.error(f"❌ Álbum '{album_name}' de '{artist_name}' não encontrado no Last.fm")
+            logger.error("💡 Verifique a grafia do nome do artista e álbum")
+        else:
+            logger.error(f"❌ Erro na API do Last.fm: {e}")
+            if "Invalid API key" in str(e) or "Invalid method signature" in str(e):
+                logger.error("💡 Verifique suas credenciais LASTFM_API_KEY e LASTFM_API_SECRET no arquivo .env")
+        return None
+    except pylast.PyLastError as e:
+        logger.error(f"❌ Erro ao acessar a API do Last.fm: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"❌ Erro inesperado: {e}")
+        return None
+
+def download_album_tracks(artist_name, album_name, output_dir=None, skip_existing=True):
+    """
+    Baixa todas as faixas de um álbum específico do Last.fm.
+    GARANTE que apenas tracks individuais sejam baixadas, nunca álbuns completos.
+    
+    Args:
+        artist_name (str): Nome do artista
+        album_name (str): Nome do álbum
+        output_dir (str): Diretório de saída para os downloads
+        skip_existing (bool): Se True, pula músicas já baixadas anteriormente
+        
+    Returns:
+        tuple: (total, successful, failed, skipped) contagem de downloads
+    """
+    # Importar módulo principal
+    try:
+        main_module = _import_main_module()
+        
+        # Extrair funções necessárias
+        is_duplicate_download = getattr(main_module, 'is_duplicate_download')
+        connectToSlskd = getattr(main_module, 'connectToSlskd')
+    except Exception as e:
+        logger.error(f"❌ Erro ao importar funções necessárias: {e}")
+        return (0, 0, 0, 0)
+    
+    # Conectar ao SLSKD
+    slskd = connectToSlskd()
+    if not slskd:
+        logger.error("Não foi possível conectar ao servidor SLSKD")
+        return (0, 0, 0, 0)
+    
+    # Definir diretório de saída se especificado
+    original_dir = os.getcwd()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        os.chdir(output_dir)
+    
+    # Obter as faixas do álbum
+    logger.info(f"Obtendo faixas do álbum '{album_name}' de '{artist_name}'...")
+    album_tracks = get_album_tracks(artist_name, album_name)
+    
+    if album_tracks is None:
+        logger.error("Falha na autenticação ou configuração do Last.fm")
+        os.chdir(original_dir)
+        return None
+    
+    if not album_tracks:
+        logger.error(f"Nenhuma faixa encontrada no álbum '{album_name}' de '{artist_name}'")
+        os.chdir(original_dir)
+        return (0, 0, 0, 0)
+    
+    logger.info(f"Encontradas {len(album_tracks)} faixas. Iniciando downloads...")
+    logger.info("🚫 MODO ANTI-ÁLBUM ATIVADO: Apenas tracks individuais serão baixadas")
+    
+    # Criar diretório para o artista e álbum
+    artist_dir = sanitize_filename(artist_name)
+    album_dir = sanitize_filename(album_name)
+    full_path = os.path.join(artist_dir, album_dir)
+    os.makedirs(full_path, exist_ok=True)
+    os.chdir(full_path)
+    
+    # Baixar cada faixa
+    successful = 0
+    failed = 0
+    skipped = 0
+    
+    for i, (artist, title) in enumerate(album_tracks, 1):
+        # Formatar a consulta como "Artista - Título"
+        query = f"{artist} - {title}"
+        
+        # Verificar se já foi baixada anteriormente
+        if skip_existing and is_duplicate_download(query):
+            logger.info(f"[{i}/{len(album_tracks)}] Pulando (já baixada): '{query}'")
+            skipped += 1
+            continue
+        
+        logger.info(f"[{i}/{len(album_tracks)}] Baixando TRACK INDIVIDUAL: '{query}'")
+        
+        try:
+            # Usar busca restrita para APENAS tracks individuais
+            result = _search_single_track_only(slskd, query)
+            if result:
+                successful += 1
+                logger.info(f"✓ TRACK INDIVIDUAL baixada: '{query}'")
+            else:
+                failed += 1
+                logger.warning(f"✗ Falha no download da track: '{query}'")
+            
+            # Pequena pausa entre downloads
+            time.sleep(2)
+        except Exception as e:
+            failed += 1
+            logger.error(f"Erro ao processar '{query}': {e}")
+    
+    # Resumo final
+    logger.info(f"\n📊 DOWNLOAD CONCLUÍDO - Álbum: '{album_name}' de '{artist_name}'")
+    logger.info(f"🎯 MODO: Apenas tracks individuais (álbuns rejeitados)")
+    logger.info(f"📊 Total de faixas: {len(album_tracks)}")
+    logger.info(f"✅ Downloads bem-sucedidos: {successful}")
+    logger.info(f"❌ Downloads com falha: {failed}")
+    logger.info(f"⏭️ Faixas puladas (já baixadas): {skipped}")
+    
+    # Restaurar diretório original
+    os.chdir(original_dir)
+    
+    return (len(album_tracks), successful, failed, skipped)
