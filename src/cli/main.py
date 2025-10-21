@@ -2031,6 +2031,9 @@ def main():
     print("   --cleanup          : Remove downloads completados da fila")
     print("   --monitor          : Monitora e limpa downloads automaticamente")
     print()
+    print("🎧 Upgrade para FLAC:")
+    print("   --flac-upgrade     : Busca versões FLAC das músicas do histórico")
+    print()
 
     # Verifica comandos especiais
     if len(sys.argv) > 1:
@@ -2061,6 +2064,18 @@ def main():
                 monitor_and_cleanup_downloads(
                     slskd, max_wait=1800, check_interval=30
                 )  # 30 min
+            return
+        
+        # Comando para upgrade FLAC
+        elif first_arg == "--flac-upgrade":
+            # Importa e executa o upgrade FLAC
+            try:
+                sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+                from scripts.flac_upgrade_module import upgrade_to_flac
+                upgrade_to_flac()
+            except ImportError:
+                print("❌ Script de upgrade FLAC não encontrado")
+                print("💡 Execute: python3 /app/scripts/flac-upgrade.py")
             return
 
         # Comando para remover entrada específica

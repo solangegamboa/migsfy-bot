@@ -23,6 +23,9 @@ services:
     # Network configuration
     networks:
       - migsfy-network
+    # Keep container running
+    command: ["tail", "-f", "/dev/null"]
+    
     # Health check
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
