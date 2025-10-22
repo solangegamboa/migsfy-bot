@@ -203,6 +203,23 @@ class PlaylistProcessor:
             print(f"❌ Erro ao remover linha: {e}")
             return False
     
+    def add_to_failed_file(self, original_file, line):
+        """Adiciona música ao arquivo de falhas"""
+        try:
+            # Gera nome do arquivo de falhas baseado no original
+            base_name = os.path.splitext(original_file)[0]
+            failed_file = f"{base_name}_failed.txt"
+            
+            # Adiciona linha ao arquivo de falhas
+            with open(failed_file, 'a', encoding='utf-8') as f:
+                f.write(f"{line}\n")
+            
+            print(f"📝 Adicionado ao arquivo de falhas: {failed_file}")
+            return True
+        except Exception as e:
+            print(f"❌ Erro ao adicionar à lista de falhas: {e}")
+            return False
+    
     def process_playlist_file(self, file_path):
         """Processa um arquivo de playlist"""
         if not os.path.exists(file_path):
@@ -251,13 +268,15 @@ class PlaylistProcessor:
                 downloaded += 1
             else:
                 print(f"❌ Falha: {line}")
+                self.add_to_failed_file(file_path, line)
+                self.remove_line_from_file(file_path, line)
             
             # Pausa entre downloads
             time.sleep(3)
         
         print(f"📊 {file_path}: {downloaded} baixadas, {skipped} puladas, {processed} processadas")
     
-    def process_playlists_folder(self):
+    def process_playlists_folder(self, include_failed=False):
         """Processa todas as playlists procurando em várias pastas"""
         possible_dirs = ["data/playlists", "playlists", "/app/playlists"]
         playlists_dir = None
@@ -273,13 +292,19 @@ class PlaylistProcessor:
             
         print(f"📁 Usando pasta: {playlists_dir}")
         
-        txt_files = [f for f in os.listdir(playlists_dir) if f.endswith('.txt')]
+        if include_failed:
+            txt_files = [f for f in os.listdir(playlists_dir) if f.endswith('_failed.txt')]
+            print("🔄 Processando arquivos de falhas")
+        else:
+            txt_files = [f for f in os.listdir(playlists_dir) if f.endswith('.txt') and not f.endswith('_failed.txt')]
         
         if not txt_files:
-            print(f"📝 Nenhum arquivo .txt encontrado em {playlists_dir}")
+            file_type = "falhas" if include_failed else "playlist"
+            print(f"📝 Nenhum arquivo de {file_type} encontrado em {playlists_dir}")
             return
         
-        print(f"🎵 Encontrados {len(txt_files)} arquivos de playlist")
+        file_type = "falhas" if include_failed else "playlist"
+        print(f"🎵 Encontrados {len(txt_files)} arquivos de {file_type}")
         
         for txt_file in txt_files:
             file_path = os.path.join(playlists_dir, txt_file)
@@ -324,6 +349,15 @@ def main():
     
     if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
         processor.run_daemon()
+    elif len(sys.argv) > 1 and sys.argv[1] == "--failed":
+        if not processor.lock.acquire():
+            print("❌ Outra instância já está rodando")
+            print("💡 Use --cleanup para remover lock órfão")
+            return
+        try:
+            processor.process_playlists_folder(include_failed=True)
+        finally:
+            processor.lock.release()
     else:
         if not processor.lock.acquire():
             print("❌ Outra instância já está rodando")
