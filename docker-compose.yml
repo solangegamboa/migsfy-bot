@@ -17,7 +17,7 @@ services:
 
     # Volumes for data persistence - mount only data directories
     volumes:
-      - ./data:/app/data
+      - /DATA/AppData/migsfy:/app/data
       - ./.env:/app/.env:ro
 
     # Network configuration
