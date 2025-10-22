@@ -75,19 +75,40 @@ def spotify_to_txt(playlist_url, output_file=None):
 
         print(f"🎵 Encontradas {len(tracks)} músicas")
 
-        # Cria diretório data/playlists se não existir
-        os.makedirs("data/playlists", exist_ok=True)
+        # Determina diretório correto (Docker ou local)
+        data_dir = "/app/data" if os.path.exists("/app/data") else "data"
+        playlists_dir = os.path.join(data_dir, "playlists")
+        
+        print(f"📁 Diretório de dados: {data_dir}")
+        print(f"📁 Diretório de playlists: {playlists_dir}")
+        print(f"📁 Diretório atual: {os.getcwd()}")
+        
+        # Cria diretório se não existir
+        try:
+            os.makedirs(playlists_dir, exist_ok=True)
+            print(f"✅ Diretório criado/verificado: {playlists_dir}")
+            
+            # Testa permissões de escrita
+            test_file = os.path.join(playlists_dir, ".test_write")
+            with open(test_file, "w") as f:
+                f.write("test")
+            os.remove(test_file)
+            print(f"✅ Permissões de escrita OK")
+            
+        except Exception as e:
+            print(f"❌ Erro ao criar diretório ou testar permissões: {e}")
+            return False
 
-        # Define nome do arquivo de saída na pasta data/playlists/
+        # Define nome do arquivo de saída
         if not output_file:
             import re
 
             # Remove caracteres problemáticos e limita tamanho
             safe_name = re.sub(r"[^\w\s-]", "", playlist_name)
             safe_name = re.sub(r"\s+", "_", safe_name.strip())[:50]
-            output_file = f"data/playlists/spotify_{safe_name}_{playlist_id}.txt"
+            output_file = os.path.join(playlists_dir, f"spotify_{safe_name}_{playlist_id}.txt")
         else:
-            output_file = f"data/playlists/{output_file}"
+            output_file = os.path.join(playlists_dir, output_file)
 
         # Escreve arquivo TXT
         with open(output_file, "w", encoding="utf-8") as f:
@@ -97,6 +118,9 @@ def spotify_to_txt(playlist_url, output_file=None):
 
         print(f"✅ Arquivo criado: {output_file}")
         print(f"📊 {len(tracks)} músicas exportadas")
+        print(f"📁 Arquivo existe? {os.path.exists(output_file)}")
+        if os.path.exists(output_file):
+            print(f"💾 Tamanho do arquivo: {os.path.getsize(output_file)} bytes")
         return True
 
     except Exception as e:

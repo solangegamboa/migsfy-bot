@@ -654,9 +654,11 @@ def process_spotify_playlist(playlist_url):
     script_dir = os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
     script_path = os.path.join(script_dir, "spotify-to-txt.py")
     
-    # Verifica se está em Docker
+    # Determina diretório correto (Docker ou local)
     data_dir = "/app/data" if os.path.exists("/app/data") else "data"
     playlists_dir = os.path.join(data_dir, "playlists")
+    print(f"📁 Diretório de dados: {data_dir}")
+    print(f"📁 Diretório de playlists: {playlists_dir}")
     
     # Cria diretório se não existir
     os.makedirs(playlists_dir, exist_ok=True)
@@ -664,11 +666,19 @@ def process_spotify_playlist(playlist_url):
     try:
         # Executa o script spotify-to-txt.py
         print("🔄 Convertendo playlist para arquivo TXT...")
+        
+        # Determina diretório raiz do projeto
+        project_root = os.path.join(os.path.dirname(__file__), "..", "..")
+        project_root = os.path.abspath(project_root)
+        
+        print(f"📁 Executando script em: {project_root}")
+        print(f"📝 Script: {script_path}")
+        
         result = subprocess.run(
             ["python3", script_path, playlist_url],
             capture_output=True,
             text=True,
-            cwd=os.path.dirname(script_path)
+            cwd=project_root
         )
         
         if result.returncode != 0:
@@ -679,6 +689,8 @@ def process_spotify_playlist(playlist_url):
         
         # Procura por novos arquivos de playlist
         playlist_files = glob.glob(os.path.join(playlists_dir, "spotify_*.txt"))
+        print(f"🔍 Procurando arquivos em: {playlists_dir}")
+        print(f"📁 Arquivos encontrados: {len(playlist_files)}")
         
         if playlist_files:
             newest_file = max(playlist_files, key=os.path.getctime)
