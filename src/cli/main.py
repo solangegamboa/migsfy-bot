@@ -642,6 +642,61 @@ def download_playlist_tracks_with_removal(
         )
 
 
+def process_spotify_playlist(playlist_url):
+    """Processa playlist do Spotify usando spotify-to-txt.py e aguarda processamento"""
+    import subprocess
+    import time
+    import glob
+    
+    print(f"🎵 Processando playlist do Spotify: {playlist_url}")
+    
+    # Determina o diretório do script
+    script_dir = os.path.join(os.path.dirname(__file__), "..", "..", "scripts")
+    script_path = os.path.join(script_dir, "spotify-to-txt.py")
+    
+    # Verifica se está em Docker
+    data_dir = "/app/data" if os.path.exists("/app/data") else "data"
+    playlists_dir = os.path.join(data_dir, "playlists")
+    
+    # Cria diretório se não existir
+    os.makedirs(playlists_dir, exist_ok=True)
+    
+    try:
+        # Executa o script spotify-to-txt.py
+        print("🔄 Convertendo playlist para arquivo TXT...")
+        result = subprocess.run(
+            ["python3", script_path, playlist_url],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(script_path)
+        )
+        
+        if result.returncode != 0:
+            print(f"❌ Erro ao converter playlist: {result.stderr}")
+            return False
+            
+        print(result.stdout)
+        
+        # Aguarda o arquivo ser criado e processado
+        print("⏳ Aguardando processamento da playlist...")
+        
+        # Procura por novos arquivos de playlist
+        playlist_files = glob.glob(os.path.join(playlists_dir, "spotify_*.txt"))
+        
+        if playlist_files:
+            newest_file = max(playlist_files, key=os.path.getctime)
+            print(f"✅ Playlist criada: {os.path.basename(newest_file)}")
+            print("📋 A playlist será processada automaticamente pelo sistema")
+            return True
+        else:
+            print("❌ Arquivo de playlist não encontrado")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro ao processar playlist: {e}")
+        return False
+
+
 # ==================== FIM DO SISTEMA SPOTIFY ====================
 
 
@@ -2008,18 +2063,8 @@ def main():
     print('   --album "Artista - Álbum" : Busca álbum completo')
     print('   "Artista - Nome Album"     : Detecção automática de álbum')
     print("🎵 Comandos Spotify:")
-    print("   --playlist URL     : Baixa todas as músicas de uma playlist")
+    print("   --playlist URL     : Converte playlist para TXT e agenda processamento")
     print("   --preview URL      : Mostra preview da playlist (sem baixar)")
-    print("   --playlist URL --limit N : Limita download a N músicas")
-    print("   --playlist URL --no-skip : Baixa mesmo duplicatas")
-    print("   --playlist URL --auto    : Baixa sem confirmação")
-    print("   --playlist URL --remove-from-playlist : Remove da playlist após download")
-    print(
-        "   --playlist URL --no-auto-cleanup : Desabilita limpeza automática de downloads"
-    )
-    print(
-        "   --playlist URL --auto --limit N --no-skip --remove-from-playlist : Combina opções"
-    )
     print()
     print("🏷️ Comandos Last.fm:")
     print('   --lastfm-tag "tag" : Baixa músicas populares de uma tag')
@@ -2142,127 +2187,12 @@ def main():
         # Comando para baixar playlist
         elif first_arg == "--playlist" and len(sys.argv) > 2:
             playlist_url = sys.argv[2]
-
-            # Processa argumentos adicionais
-            max_tracks = None
-            skip_duplicates = True
-            auto_confirm = False
-            remove_from_playlist = False
-
-            for i, arg in enumerate(sys.argv[3:], 3):
-                if arg == "--limit" and i + 1 < len(sys.argv):
-                    try:
-                        max_tracks = int(sys.argv[i + 1])
-                    except ValueError:
-                        print("❌ Valor inválido para --limit")
-                        return
-                elif arg == "--no-skip":
-                    skip_duplicates = False
-                elif arg == "--auto" or arg == "--yes" or arg == "-y":
-                    auto_confirm = True
-                elif arg == "--remove-from-playlist":
-                    remove_from_playlist = True
-
-            # Configura Spotify (cliente básico para leitura)
-            sp = setup_spotify_client()
-            if not sp:
-                return
-
-            # Se vai remover da playlist, precisa de autenticação de usuário
-            sp_user = None
-            if remove_from_playlist:
-                print("🔐 Configurando autenticação para modificar playlist...")
-                sp_user = setup_spotify_user_client()
-                if not sp_user:
-                    print("❌ Não foi possível autenticar para modificar playlist")
-                    print("💡 Continuando sem remoção automática da playlist")
-                    remove_from_playlist = False
-
-            # Configura slskd
-            slskd = connectToSlskd()
-            if not slskd:
-                return
-
-            # Extrai ID da playlist
-            playlist_id = extract_playlist_id(playlist_url)
-            if not playlist_id:
-                print("❌ URL de playlist inválida")
-                print(
-                    "💡 Use: https://open.spotify.com/playlist/ID ou spotify:playlist:ID"
-                )
-                return
-
-            # Obtém faixas da playlist (com URIs se vai remover)
-            if remove_from_playlist:
-                tracks, playlist_name = get_playlist_tracks_with_uris(sp, playlist_id)
+            
+            if process_spotify_playlist(playlist_url):
+                print("✅ Playlist processada com sucesso")
+                print("💡 Use o playlist processor para baixar as músicas")
             else:
-                tracks, playlist_name = get_playlist_tracks(sp, playlist_id)
-
-            if not tracks:
-                return
-
-            # Mostra preview antes de baixar
-            show_playlist_preview(tracks, limit=10)
-
-            # Verifica se deve desabilitar limpeza automática
-            auto_cleanup = "--no-auto-cleanup" not in sys.argv
-
-            # Confirmação do usuário (se não for automático)
-            if not auto_confirm:
-                print(
-                    f"\n🤔 Deseja baixar {len(tracks)} faixas da playlist '{playlist_name}'?"
-                )
-                if max_tracks:
-                    print(f"   (limitado a {max_tracks} faixas)")
-                if not skip_duplicates:
-                    print(f"   (incluindo duplicatas)")
-                if remove_from_playlist:
-                    print(f"   🗑️ (faixas encontradas serão removidas da playlist)")
-                if auto_cleanup:
-                    print(f"   🧹 (limpeza automática de downloads habilitada)")
-                else:
-                    print(f"   🧹 (limpeza automática desabilitada)")
-
-                confirm = input("Digite 'sim' para continuar: ").lower().strip()
-                if confirm not in ["sim", "s", "yes", "y"]:
-                    print("❌ Download cancelado pelo usuário")
-                    return
-            else:
-                print(
-                    f"\n🚀 Iniciando download automático de {len(tracks)} faixas da playlist '{playlist_name}'"
-                )
-                if max_tracks:
-                    print(f"   (limitado a {max_tracks} faixas)")
-                if not skip_duplicates:
-                    print(f"   (incluindo duplicatas)")
-                if remove_from_playlist:
-                    print(f"   🗑️ (faixas encontradas serão removidas da playlist)")
-                if auto_cleanup:
-                    print(f"   🧹 (limpeza automática de downloads habilitada)")
-                else:
-                    print(f"   🧹 (limpeza automática desabilitada)")
-
-            # Inicia downloads (com ou sem remoção da playlist)
-            if remove_from_playlist:
-                download_playlist_tracks_with_removal(
-                    slskd,
-                    sp_user,
-                    playlist_id,
-                    tracks,
-                    playlist_name,
-                    max_tracks,
-                    skip_duplicates,
-                    auto_cleanup,
-                )
-            else:
-                download_playlist_tracks(
-                    slskd,
-                    tracks,
-                    playlist_name,
-                    max_tracks,
-                    skip_duplicates,
-                    auto_cleanup,
-                )
+                print("❌ Falha ao processar playlist")
             return
 
         # Comando para forçar download
