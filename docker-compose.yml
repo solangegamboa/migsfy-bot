@@ -23,43 +23,9 @@ services:
     # Network configuration
     networks:
       - migsfy-network
+
     # Keep container running
-    command: ["tail", "-f", "/dev/null"]
-    
-    # Health check
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # Telegram Bot service
-  telegram-bot:
-    build: .
-    container_name: migsfy-telegram-bot
-    restart: unless-stopped
-
-    # Environment variables from .env file
-    env_file:
-      - .env
-
-    # Additional environment variables for user permissions
-    environment:
-      - PUID=${PUID:-0}
-      - PGID=${PGID:-0}
-
-    # Volumes for data persistence - mount only data directories
-    volumes:
-      - /DATA/AppData/migsfy:/app/data
-      - ./.env:/app/.env:ro
-
-    # Network configuration
-    networks:
-      - migsfy-network
-
-    # Command to run Telegram bot
-    command: ["--telegram-bot"]
+    entrypoint: ["tail", "-f", "/dev/null"]
 
     # Health check
     healthcheck:
@@ -69,27 +35,62 @@ services:
       retries: 3
       start_period: 10s
 
-  # Optional: Add slskd service if you want to run it in the same stack
-  # slskd:
-  #   image: slskd/slskd:latest
-  #   container_name: slskd
+  # # Telegram Bot service
+  # telegram-bot:
+  #   build: .
+  #   container_name: migsfy-telegram-bot
   #   restart: unless-stopped
-  #   ports:
-  #     - 5030:5030/tcp
-  #     - 5031:5031/tcp
-  #     - 50300:50300/tcp
+
+  #   # Environment variables from .env file
+  #   env_file:
+  #     - .env
+
+  #   # Additional environment variables for user permissions
+  #   environment:
+  #     - PUID=${PUID:-0}
+  #     - PGID=${PGID:-0}
+
+  #   # Volumes for data persistence - mount only data directories
   #   volumes:
-  #     - /DATA/AppData/slskd:/app
-  #     - ./slskd-downloads:/app/downloads
-  #     - ./slskd-shared:/app/shared
-  #     - /media/devmon/SOLAR/media/slskd:/music
-  #     - /media/devmon/SOLAR/media/slskd:/complete
+  #     - /DATA/AppData/migsfy:/app/data
+  #     - ./.env:/app/.env:ro
+
+  #   # Network configuration
   #   networks:
   #     - migsfy-network
-  #   user: 0:0
-  #   environment:
-  #     SLSKD_REMOTE_CONFIGURATION: true
-  #     SLSKD_SHARED_DIR: /music
+
+  #   # Command to run Telegram bot
+  #   command: ["--telegram-bot"]
+
+  #   # Health check
+  #   healthcheck:
+  #     test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 10s
+
+  # # Optional: Add slskd service if you want to run it in the same stack
+  # # slskd:
+  # #   image: slskd/slskd:latest
+  # #   container_name: slskd
+  # #   restart: unless-stopped
+  # #   ports:
+  # #     - 5030:5030/tcp
+  # #     - 5031:5031/tcp
+  # #     - 50300:50300/tcp
+  # #   volumes:
+  # #     - /DATA/AppData/slskd:/app
+  # #     - ./slskd-downloads:/app/downloads
+  # #     - ./slskd-shared:/app/shared
+  # #     - /media/devmon/SOLAR/media/slskd:/music
+  # #     - /media/devmon/SOLAR/media/slskd:/complete
+  # #   networks:
+  # #     - migsfy-network
+  # #   user: 0:0
+  # #   environment:
+  # #     SLSKD_REMOTE_CONFIGURATION: true
+  # #     SLSKD_SHARED_DIR: /music
 
 networks:
   migsfy-network:

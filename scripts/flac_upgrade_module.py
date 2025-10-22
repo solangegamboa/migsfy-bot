@@ -181,6 +181,49 @@ def download_flac(slskd, flac_info, search_term):
         print(f"  ❌ Erro no download FLAC: {e}")
         return False
 
+def add_flac_to_download_history(search_term, filename, username, file_size=0):
+    """Adiciona download FLAC ao histórico com hash único"""
+    history = load_download_history()
+    
+    # Gera hash para o FLAC baseado no termo de busca + "_flac"
+    import hashlib
+    normalized = search_term.lower().replace(' ', '').replace('-', '')
+    flac_hash = hashlib.md5(f"{normalized}_flac".encode('utf-8')).hexdigest()[:12]
+    
+    flac_entry = {
+        'original_search': f"{search_term} [FLAC]",
+        'normalized_search': normalized,
+        'filename': filename,
+        'username': username,
+        'file_size': file_size,
+        'date': time.strftime('%Y-%m-%dT%H:%M:%S'),
+        'hash': flac_hash,
+        'is_flac': True,
+        'source_search': search_term
+    }
+    
+    history[flac_hash] = flac_entry
+    save_download_history(history)
+    
+    print(f"📝 FLAC adicionado ao histórico: {search_term}")
+
+def is_flac_already_downloaded(search_term):
+    """Verifica se já foi baixado FLAC desta música"""
+    history = load_download_history()
+    
+    # Procura por entrada FLAC existente
+    for entry in history.values():
+        if (entry.get('is_flac') and 
+            entry.get('source_search', '').lower() == search_term.lower()):
+            print(f"🔄 FLAC já baixado anteriormente:")
+            print(f"   📅 Data: {entry['date']}")
+            print(f"   🎵 Busca: {entry['original_search']}")
+            print(f"   📄 Arquivo: {entry.get('filename', 'N/A')}")
+            print(f"   👤 Usuário: {entry.get('username', 'N/A')}")
+            return True
+    
+    return False
+
 def upgrade_to_flac():
     """Função principal para upgrade das músicas para FLAC"""
     print("🎵 FLAC UPGRADE TOOL")
@@ -200,14 +243,27 @@ def upgrade_to_flac():
     
     successful_upgrades = 0
     failed_upgrades = 0
+    already_flac = 0
     
     for i, (hash_key, entry) in enumerate(history.items(), 1):
         search_term = entry.get('original_search', '')
         
+        # Pula entradas que já são FLAC
+        if entry.get('is_flac'):
+            continue
+            
         print(f"\n📍 [{i}/{len(history)}] {search_term}")
         
+        # Verifica se já foi baixado FLAC desta música
+        if is_flac_already_downloaded(search_term):
+            already_flac += 1
+            print("  ⏭️ FLAC já baixado - pulando")
+            continue
+        
+        # Verifica flag antiga de upgrade
         if 'flac_upgraded' in entry and entry['flac_upgraded']:
-            print("  ⏭️ Já tem versão FLAC - pulando")
+            already_flac += 1
+            print("  ⏭️ Já tem versão FLAC (flag antiga) - pulando")
             continue
         
         flac_info = search_flac_version(slskd, search_term)
@@ -216,6 +272,15 @@ def upgrade_to_flac():
             success = download_flac(slskd, flac_info, search_term)
             
             if success:
+                # Adiciona FLAC ao histórico como entrada separada
+                add_flac_to_download_history(
+                    search_term,
+                    flac_info['file_info']['filename'],
+                    flac_info['username'],
+                    flac_info['file_info']['size']
+                )
+                
+                # Marca entrada original como tendo FLAC
                 entry['flac_upgraded'] = True
                 entry['flac_filename'] = flac_info['file_info']['filename']
                 entry['flac_username'] = flac_info['username']
@@ -239,8 +304,9 @@ def upgrade_to_flac():
     print(f"\n{'='*50}")
     print(f"📊 RELATÓRIO FINAL - FLAC UPGRADE")
     print(f"✅ Upgrades bem-sucedidos: {successful_upgrades}")
+    print(f"⏭️ FLACs já existentes: {already_flac}")
     print(f"❌ Upgrades com falha: {failed_upgrades}")
-    print(f"📊 Total processado: {len(history)}")
+    print(f"📊 Total processado: {len([e for e in history.values() if not e.get('is_flac')])}")
     
     if successful_upgrades > 0:
         print(f"\n💡 {successful_upgrades} downloads FLAC foram iniciados!")
