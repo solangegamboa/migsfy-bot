@@ -57,6 +57,11 @@ else
     echo "ℹ️ Cron não configurado (LASTFM_AUTO_TAGS não encontrado no .env)"
 fi
 
+# Start playlist processor in background
+echo "🎵 Iniciando processador de playlists em background..."
+nohup python3 src/playlist_processor.py --daemon > /app/logs/playlist_processor.log 2>&1 &
+echo "✅ Processador de playlists iniciado (PID: $!)"
+
 # Check if .env file exists
 if [ ! -f "/app/.env" ]; then
     echo "⚠️ Warning: .env file not found!"
