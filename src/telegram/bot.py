@@ -103,6 +103,31 @@ logger = logging.getLogger(__name__)
 # Reduz logs verbosos do httpx
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+class SingletonLock:
+    def __init__(self, lockfile):
+        self.lockfile = lockfile
+        self.locked = False
+    
+    def acquire(self):
+        if os.path.exists(self.lockfile):
+            with open(self.lockfile, 'r') as f:
+                pid = f.read().strip()
+            try:
+                os.kill(int(pid), 0)
+                return False
+            except (OSError, ValueError):
+                os.remove(self.lockfile)
+        
+        with open(self.lockfile, 'w') as f:
+            f.write(str(os.getpid()))
+        self.locked = True
+        return True
+    
+    def release(self):
+        if self.locked and os.path.exists(self.lockfile):
+            os.remove(self.lockfile)
+            self.locked = False
+
 class TelegramMusicBot:
     def __init__(self):
         self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -116,6 +141,11 @@ class TelegramMusicBot:
         # Sistema de controle de tarefas ativas
         self.active_tasks = {}  # {task_id: {'task': asyncio.Task, 'type': str, 'user_id': int, 'chat_id': int}}
         self.task_counter = 0
+        
+        # Sistema de lock para evitar múltiplas instâncias
+        lockfile_path = "/app/data/telegram_bot.lock" if os.path.exists("/app/data") else "data/telegram_bot.lock"
+        os.makedirs(os.path.dirname(lockfile_path), exist_ok=True)
+        self.lock = SingletonLock(lockfile_path)
         
         if not self.bot_token:
             raise ValueError("TELEGRAM_BOT_TOKEN não encontrado no .env")
@@ -2272,46 +2302,53 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
             logger.error("python-telegram-bot não está disponível")
             return
         
-        logger.info("🤖 Iniciando Telegram Bot...")
-        
-        # Cria aplicação
-        application = Application.builder().token(self.bot_token).build()
-        
-        # Adiciona handlers de comandos específicos
-        application.add_handler(CommandHandler("start", self.start_command))
-        application.add_handler(CommandHandler("help", self.help_command))
-        application.add_handler(CommandHandler("status", self.status_command))
-        application.add_handler(CommandHandler("search", self.search_command))
-        application.add_handler(CommandHandler("album", self.album_command))
-        application.add_handler(CommandHandler("spotify", self.spotify_command))
-        application.add_handler(CommandHandler("history", self.history_command))
-        application.add_handler(CommandHandler("clear_history", self.clear_history_command))
-        application.add_handler(CommandHandler("tasks", self.tasks_command))
-        application.add_handler(CommandHandler("info", self.info_command))
-        application.add_handler(CommandHandler("lastfm_tag", self.lastfm_tag_command))
-        application.add_handler(CommandHandler("lastfm_artist", self.lastfm_artist_command))
-        application.add_handler(CommandHandler("lastfm_album", self.lastfm_album_command))
-        application.add_handler(CallbackQueryHandler(self.handle_callback_query))
-        
-        # Adiciona handler de erro
-        application.add_error_handler(self.error_handler)
-        
-        # NÃO adiciona handler para mensagens de texto - elas serão ignoradas
-        
-        # Inicia o bot com configurações robustas
-        logger.info("✅ Bot iniciado! Pressione Ctrl+C para parar.")
-        logger.info("🔇 Mensagens que não sejam comandos serão ignoradas")
+        if not self.lock.acquire():
+            logger.error("❌ Outra instância do bot já está rodando")
+            return
         
         try:
-            application.run_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True,
-                poll_interval=1.0,
-                timeout=10
-            )
-        except Exception as e:
-            logger.error(f"Erro durante polling: {e}")
-            raise
+            logger.info("🤖 Iniciando Telegram Bot...")
+            
+            # Cria aplicação
+            application = Application.builder().token(self.bot_token).build()
+            
+            # Adiciona handlers de comandos específicos
+            application.add_handler(CommandHandler("start", self.start_command))
+            application.add_handler(CommandHandler("help", self.help_command))
+            application.add_handler(CommandHandler("status", self.status_command))
+            application.add_handler(CommandHandler("search", self.search_command))
+            application.add_handler(CommandHandler("album", self.album_command))
+            application.add_handler(CommandHandler("spotify", self.spotify_command))
+            application.add_handler(CommandHandler("history", self.history_command))
+            application.add_handler(CommandHandler("clear_history", self.clear_history_command))
+            application.add_handler(CommandHandler("tasks", self.tasks_command))
+            application.add_handler(CommandHandler("info", self.info_command))
+            application.add_handler(CommandHandler("lastfm_tag", self.lastfm_tag_command))
+            application.add_handler(CommandHandler("lastfm_artist", self.lastfm_artist_command))
+            application.add_handler(CommandHandler("lastfm_album", self.lastfm_album_command))
+            application.add_handler(CallbackQueryHandler(self.handle_callback_query))
+            
+            # Adiciona handler de erro
+            application.add_error_handler(self.error_handler)
+            
+            # NÃO adiciona handler para mensagens de texto - elas serão ignoradas
+            
+            # Inicia o bot com configurações robustas
+            logger.info("✅ Bot iniciado! Pressione Ctrl+C para parar.")
+            logger.info("🔇 Mensagens que não sejam comandos serão ignoradas")
+            
+            try:
+                application.run_polling(
+                    allowed_updates=Update.ALL_TYPES,
+                    drop_pending_updates=True,
+                    poll_interval=1.0,
+                    timeout=10
+                )
+            except Exception as e:
+                logger.error(f"Erro durante polling: {e}")
+                raise
+        finally:
+            self.lock.release()
 
 
 def main():
