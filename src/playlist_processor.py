@@ -213,12 +213,17 @@ class PlaylistProcessor:
         print(f"📊 {file_path}: {downloaded} baixadas, {skipped} puladas, {processed} processadas")
     
     def process_playlists_folder(self):
-        """Processa todas as playlists na pasta data/playlists/"""
+        """Processa todas as playlists na pasta data/playlists/ ou playlists/"""
         playlists_dir = "data/playlists"
         
         if not os.path.exists(playlists_dir):
-            print(f"📁 Pasta {playlists_dir} não encontrada")
-            return
+            playlists_dir = "playlists"
+            if not os.path.exists(playlists_dir):
+                print(f"📁 Nenhuma pasta de playlists encontrada (data/playlists ou playlists)")
+                return
+            print(f"📁 Usando pasta alternativa: {playlists_dir}")
+        else:
+            print(f"📁 Usando pasta: {playlists_dir}")
         
         txt_files = [f for f in os.listdir(playlists_dir) if f.endswith('.txt')]
         
