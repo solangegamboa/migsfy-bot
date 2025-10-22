@@ -14,9 +14,36 @@ load_dotenv()
 # Adiciona o diretório src ao path
 sys.path.insert(0, os.path.dirname(__file__))
 
+class SingletonLock:
+    def __init__(self, lockfile):
+        self.lockfile = lockfile
+        self.locked = False
+    
+    def acquire(self):
+        if os.path.exists(self.lockfile):
+            with open(self.lockfile, 'r') as f:
+                pid = f.read().strip()
+            try:
+                os.kill(int(pid), 0)
+                return False
+            except (OSError, ValueError):
+                os.remove(self.lockfile)
+        
+        with open(self.lockfile, 'w') as f:
+            f.write(str(os.getpid()))
+        self.locked = True
+        return True
+    
+    def release(self):
+        if self.locked and os.path.exists(self.lockfile):
+            os.remove(self.lockfile)
+            self.locked = False
+
 class PlaylistProcessor:
     def __init__(self, db_path="data/downloads.db"):
         self.db_path = db_path
+        lockfile_path = "/app/data/playlist_processor.lock" if os.path.exists("/app/data") else "data/playlist_processor.lock"
+        self.lock = SingletonLock(lockfile_path)
         self.init_database()
         
     def init_database(self):
@@ -243,19 +270,26 @@ class PlaylistProcessor:
     
     def run_daemon(self):
         """Executa em modo daemon"""
-        print("🔄 Iniciando processador de playlists em modo daemon")
+        if not self.lock.acquire():
+            print("❌ Outra instância já está rodando")
+            return
         
-        while True:
-            try:
-                self.process_playlists_folder()
-                print("⏰ Aguardando 30 minutos...")
-                time.sleep(1800)  # 30 minutos
-            except KeyboardInterrupt:
-                print("\n🛑 Daemon interrompido")
-                break
-            except Exception as e:
-                print(f"❌ Erro no daemon: {e}")
-                time.sleep(300)  # 5 minutos em caso de erro
+        try:
+            print("🔄 Iniciando processador de playlists em modo daemon")
+            
+            while True:
+                try:
+                    self.process_playlists_folder()
+                    print("⏰ Aguardando 30 minutos...")
+                    time.sleep(1800)  # 30 minutos
+                except KeyboardInterrupt:
+                    print("\n🛑 Daemon interrompido")
+                    break
+                except Exception as e:
+                    print(f"❌ Erro no daemon: {e}")
+                    time.sleep(300)  # 5 minutos em caso de erro
+        finally:
+            self.lock.release()
 
 def main():
     processor = PlaylistProcessor()
@@ -263,7 +297,13 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
         processor.run_daemon()
     else:
-        processor.process_playlists_folder()
+        if not processor.lock.acquire():
+            print("❌ Outra instância já está rodando")
+            return
+        try:
+            processor.process_playlists_folder()
+        finally:
+            processor.lock.release()
 
 if __name__ == "__main__":
     main()
