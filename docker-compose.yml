@@ -17,7 +17,7 @@ services:
 
     # Volumes for data persistence - mount only data directories
     volumes:
-      - /DATA/AppData/migsfy:/app/data
+      - ./data:/app/data
       - ./.env:/app/.env:ro
 
     # Network configuration
@@ -25,7 +25,7 @@ services:
       - migsfy-network
 
     # Keep container running
-    entrypoint: ["tail", "-f", "/dev/null"]
+    command: ["--daemon"]
 
     # Health check
     healthcheck:

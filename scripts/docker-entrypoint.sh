@@ -101,10 +101,19 @@ if [ "$1" = "--telegram-bot" ] || [ "$1" = "--bot" ]; then
     run_command python src/telegram/bot.py
 fi
 
-# If no arguments provided, show usage
-if [ $# -eq 0 ]; then
+# Check for daemon mode
+if [ "$1" = "--daemon" ]; then
+    echo "🔄 Container rodando em modo daemon..."
+    echo "💡 Use 'docker exec migsfy-bot python src/cli/main.py [args]' para executar comandos"
+    # Keep container alive in daemon mode
+    tail -f /dev/null
+elif [ $# -eq 0 ]; then
+    # If no arguments provided, show usage and keep running
     show_usage
-    run_command python src/cli/main.py
+    echo "🔄 Container rodando em background..."
+    echo "💡 Use 'docker exec migsfy-bot python src/cli/main.py [args]' para executar comandos"
+    # Keep container alive
+    tail -f /dev/null
 else
     # Execute the Python script with provided arguments
     run_command python src/cli/main.py "$@"
