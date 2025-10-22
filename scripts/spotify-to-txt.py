@@ -116,6 +116,12 @@ def spotify_to_txt(playlist_url, output_file=None):
                 line = f"{track['artist']} - {track['album']} - {track['title']}\n"
                 f.write(line)
 
+        # Verifica se arquivo está vazio e deleta se necessário
+        if os.path.getsize(output_file) == 0:
+            os.remove(output_file)
+            print(f"❌ Arquivo vazio removido: {output_file}")
+            return False
+
         print(f"✅ Arquivo criado: {output_file}")
         print(f"📊 {len(tracks)} músicas exportadas")
         print(f"📁 Arquivo existe? {os.path.exists(output_file)}")
