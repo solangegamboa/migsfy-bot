@@ -677,16 +677,16 @@ def process_spotify_playlist(playlist_url):
             
         print(result.stdout)
         
-        # Aguarda o arquivo ser criado e processado
-        print("⏳ Aguardando processamento da playlist...")
-        
         # Procura por novos arquivos de playlist
         playlist_files = glob.glob(os.path.join(playlists_dir, "spotify_*.txt"))
         
         if playlist_files:
             newest_file = max(playlist_files, key=os.path.getctime)
-            print(f"✅ Playlist criada: {os.path.basename(newest_file)}")
-            print("📋 A playlist será processada automaticamente pelo sistema")
+            print(f"✅ Playlist adicionada à fila: {os.path.basename(newest_file)}")
+            print("🔄 Status: Aguardando processamento automático")
+            print("📋 O sistema processará a playlist em segundo plano")
+            print("⏱️ Tempo estimado: 2-5 minutos por música")
+            print("📊 Use o histórico para acompanhar o progresso")
             return True
         else:
             print("❌ Arquivo de playlist não encontrado")
@@ -2188,11 +2188,26 @@ def main():
         elif first_arg == "--playlist" and len(sys.argv) > 2:
             playlist_url = sys.argv[2]
             
+            print("🎵 PROCESSAMENTO DE PLAYLIST SPOTIFY")
+            print("=" * 50)
+            
             if process_spotify_playlist(playlist_url):
-                print("✅ Playlist processada com sucesso")
-                print("💡 Use o playlist processor para baixar as músicas")
+                print("\n✅ Playlist adicionada à fila de processamento!")
+                print("\n🔄 COMO FUNCIONA:")
+                print("1. Sua playlist foi convertida para arquivo TXT")
+                print("2. O sistema processará automaticamente em segundo plano")
+                print("3. Cada música será buscada e baixada individualmente")
+                print("4. Músicas já baixadas serão puladas automaticamente")
+                print("\n⏱️ TEMPO ESTIMADO:")
+                print("- 2-5 minutos por música (dependendo da disponibilidade)")
+                print("- O processamento continua mesmo se você fechar o terminal")
+                print("\n📊 ACOMPANHAR PROGRESSO:")
+                print("- Use: python3 src/cli/main.py --history")
+                print("- Verifique a interface web do slskd")
+                print("- Monitore os logs do sistema")
             else:
-                print("❌ Falha ao processar playlist")
+                print("\n❌ Falha ao processar playlist")
+                print("💡 Verifique se a URL está correta e tente novamente")
             return
 
         # Comando para forçar download

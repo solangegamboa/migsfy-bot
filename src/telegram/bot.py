@@ -335,7 +335,7 @@ Bem-vindo! Este bot permite buscar e baixar músicas usando slskd e Spotify.
 /help - Mostra ajuda completa
 /search <termo> - Busca uma música
 /album <artista - álbum> - Busca álbum completo
-/spotify <url> - Baixa playlist do Spotify
+/spotify <url> - Adiciona playlist à fila de processamento
 /tasks - Ver e cancelar tarefas ativas
 /history - Mostra histórico de downloads
 /status - Status dos serviços
@@ -345,7 +345,8 @@ Bem-vindo! Este bot permite buscar e baixar músicas usando slskd e Spotify.
 `/album Pink Floyd - The Dark Side of the Moon`
 `/spotify https://open.spotify.com/playlist/...`
 
-🛑 **Novo:** Todas as buscas agora podem ser canceladas! Use os botões que aparecem ou `/tasks` para gerenciar.
+🔄 **Sistema de Filas:** Playlists do Spotify são processadas automaticamente em segundo plano!
+🛑 **Cancelamento:** Todas as buscas podem ser canceladas usando os botões ou `/tasks`
 
 💡 Use `/help` para ver todos os comandos e opções disponíveis.
         """
@@ -370,9 +371,10 @@ Exemplo: `/search Linkin Park - In the End`
 Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
 
 **Spotify:**
-`/spotify <url>` - Baixa playlist
-`/spotify <url> limit=10` - Limita downloads
-`/spotify <url> remove=yes` - Remove da playlist
+`/spotify <url>` - Adiciona playlist à fila de processamento
+🔄 **Sistema de Filas:** Playlists são processadas automaticamente em segundo plano
+⏱️ **Tempo:** 2-5 minutos por música (processamento contínuo)
+Exemplo: `/spotify https://open.spotify.com/playlist/ID`
 
 **Last.fm:**
 `/lastfm_tag <tag>` - Baixa automaticamente as 25 músicas mais populares de uma tag
@@ -467,19 +469,24 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
             return
         
         if not context.args:
-            await update.message.reply_text("❌ Use: /spotify <url> [opções]\n\nExemplo: `/spotify https://open.spotify.com/playlist/ID`", parse_mode='Markdown')
+            await update.message.reply_text(
+                "❌ **Comando Incompleto**\n\n"
+                "**Uso:**\n"
+                "`/spotify <url_da_playlist>`\n\n"
+                "**Exemplo:**\n"
+                "`/spotify https://open.spotify.com/playlist/37i9dQZF1DX0XUsuxWHRQd`\n\n"
+                "🔄 **Como funciona:**\n"
+                "1. Sua playlist é convertida para arquivo TXT\n"
+                "2. Entra em uma fila de processamento automático\n"
+                "3. Cada música é buscada e baixada individualmente\n"
+                "4. Músicas já baixadas são puladas automaticamente\n\n"
+                "⏱️ **Tempo estimado:** 2-5 minutos por música",
+                parse_mode='Markdown'
+            )
             return
         
         playlist_url = context.args[0]
-        
-        # Processa opções
-        options = {}
-        for arg in context.args[1:]:
-            if '=' in arg:
-                key, value = arg.split('=', 1)
-                options[key.lower()] = value.lower()
-        
-        await self._handle_playlist_download(update, playlist_url, options)
+        await self._handle_spotify_playlist_processing(update, playlist_url)
         
     async def lastfm_tag_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /lastfm_tag para baixar músicas populares de uma tag do Last.fm"""
@@ -1974,7 +1981,63 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
             # Fallback para método básico se módulo não disponível
             return self._extract_album_name_from_path(candidate['directory'])
     
-    async def _handle_playlist_download(self, update: Update, playlist_url: str, options: dict):
+    async def _handle_spotify_playlist_processing(self, update: Update, playlist_url: str):
+        """Processa playlist do Spotify usando o sistema de filas"""
+        # Mensagem inicial
+        status_msg = await update.message.reply_text(
+            "🎵 **Processando Playlist do Spotify**\n\n"
+            "🔄 Convertendo playlist para arquivo TXT...\n"
+            "_Por favor, aguarde..._",
+            parse_mode='Markdown'
+        )
+        
+        try:
+            # Importa e executa a função de processamento
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cli'))
+            from main import process_spotify_playlist
+            
+            # Executa o processamento em thread separada
+            loop = asyncio.get_event_loop()
+            success = await loop.run_in_executor(None, process_spotify_playlist, playlist_url)
+            
+            if success:
+                await status_msg.edit_text(
+                    "✅ **Playlist Adicionada à Fila!**\n\n"
+                    "🔄 **Status:** Aguardando processamento automático\n\n"
+                    "📋 **Como funciona:**\n"
+                    "1. Sua playlist foi convertida para arquivo TXT\n"
+                    "2. O sistema processará automaticamente em segundo plano\n"
+                    "3. Cada música será buscada e baixada individualmente\n"
+                    "4. Músicas já baixadas serão puladas automaticamente\n\n"
+                    "⏱️ **Tempo estimado:** 2-5 minutos por música\n\n"
+                    "📊 **Acompanhar progresso:**\n"
+                    "• Use /history para ver downloads\n"
+                    "• O processamento continua em segundo plano\n"
+                    "• Verifique a interface web do slskd",
+                    parse_mode='Markdown'
+                )
+            else:
+                await status_msg.edit_text(
+                    "❌ **Falha ao Processar Playlist**\n\n"
+                    "Não foi possível processar a playlist do Spotify.\n\n"
+                    "**Possíveis causas:**\n"
+                    "• URL inválida ou playlist privada\n"
+                    "• Credenciais do Spotify não configuradas\n"
+                    "• Problema de conectividade\n\n"
+                    "💡 **Dica:** Verifique se a URL está correta e tente novamente",
+                    parse_mode='Markdown'
+                )
+        
+        except Exception as e:
+            await status_msg.edit_text(
+                f"❌ **Erro Inesperado**\n\n"
+                f"Ocorreu um erro ao processar a playlist:\n"
+                f"`{str(e)}`\n\n"
+                f"Entre em contato com o administrador se o problema persistir.",
+                parse_mode='Markdown'
+            )
+    
+    async def _handle_playlist_download_old(self, update: Update, playlist_url: str, options: dict):
         """Manipula download de playlist"""
         if not self.spotify_client:
             await update.message.reply_text("❌ Spotify não está configurado")
