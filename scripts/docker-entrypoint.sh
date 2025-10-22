@@ -36,6 +36,12 @@ echo "🔧 Running with PUID=$PUID and PGID=$PGID"
 mkdir -p /app/data /app/cache /app/logs
 chmod 755 /app/data /app/cache /app/logs
 
+# Remove lock files from previous runs
+echo "🧹 Removendo arquivos de lock..."
+rm -f /app/data/playlist_processor.lock
+rm -f /app/data/telegram_bot.lock
+echo "✅ Arquivos de lock removidos"
+
 # Setup cron for Last.fm auto downloads if configured
 if [ -f "/app/.env" ] && grep -q "LASTFM_AUTO_TAGS" /app/.env; then
     echo "⏰ Configurando cron para downloads automáticos do Last.fm..."

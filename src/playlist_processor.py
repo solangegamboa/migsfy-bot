@@ -21,18 +21,36 @@ class SingletonLock:
     
     def acquire(self):
         if os.path.exists(self.lockfile):
-            with open(self.lockfile, 'r') as f:
-                pid = f.read().strip()
             try:
-                os.kill(int(pid), 0)
-                return False
-            except (OSError, ValueError):
-                os.remove(self.lockfile)
+                with open(self.lockfile, 'r') as f:
+                    pid = f.read().strip()
+                
+                # Verifica se o PID é válido
+                if not pid or not pid.isdigit():
+                    os.remove(self.lockfile)
+                else:
+                    try:
+                        # Tenta verificar se o processo existe
+                        os.kill(int(pid), 0)
+                        # Se chegou aqui, processo existe
+                        return False
+                    except (OSError, ProcessLookupError):
+                        # Processo não existe, remove lock
+                        os.remove(self.lockfile)
+            except (IOError, ValueError):
+                # Arquivo corrompido, remove
+                try:
+                    os.remove(self.lockfile)
+                except:
+                    pass
         
-        with open(self.lockfile, 'w') as f:
-            f.write(str(os.getpid()))
-        self.locked = True
-        return True
+        try:
+            with open(self.lockfile, 'w') as f:
+                f.write(str(os.getpid()))
+            self.locked = True
+            return True
+        except Exception:
+            return False
     
     def release(self):
         if self.locked and os.path.exists(self.lockfile):
@@ -292,6 +310,16 @@ class PlaylistProcessor:
             self.lock.release()
 
 def main():
+    # Verifica se é para forçar limpeza do lock
+    if len(sys.argv) > 1 and sys.argv[1] == "--cleanup":
+        lockfile_path = "/app/data/playlist_processor.lock" if os.path.exists("/app/data") else "data/playlist_processor.lock"
+        if os.path.exists(lockfile_path):
+            os.remove(lockfile_path)
+            print("✅ Lock file removido")
+        else:
+            print("ℹ️ Nenhum lock file encontrado")
+        return
+    
     processor = PlaylistProcessor()
     
     if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
@@ -299,6 +327,7 @@ def main():
     else:
         if not processor.lock.acquire():
             print("❌ Outra instância já está rodando")
+            print("💡 Use --cleanup para remover lock órfão")
             return
         try:
             processor.process_playlists_folder()
