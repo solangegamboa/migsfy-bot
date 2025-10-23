@@ -300,42 +300,55 @@ class PlaylistProcessor:
             print(f"❌ Erro ao remover linha: {e}")
             return False
     
+    def find_download_in_queue(self, slskd, filename, username):
+        """Procura download específico na fila por usuário e arquivo"""
+        try:
+            downloads = slskd.transfers.get_all_downloads()
+            
+            for download in downloads:
+                dl_filename = download.get('filename', '')
+                dl_username = download.get('username', '')
+                dl_state = download.get('state', '').lower()
+                
+                # Match exato por usuário E nome do arquivo
+                filename_match = (os.path.basename(dl_filename).lower() == os.path.basename(filename).lower() or
+                                os.path.basename(dl_filename).lower() in os.path.basename(filename).lower() or
+                                os.path.basename(filename).lower() in os.path.basename(dl_filename).lower())
+                
+                if dl_username == username and filename_match:
+                    return download, dl_state
+            
+            return None, None
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao procurar na fila: {e}")
+            return None, None
+    
     def wait_for_download_completion(self, slskd, filename, username, max_wait=300):
         """Aguarda confirmação de download completado"""
-        print(f"⏳ Aguardando confirmação de download por {max_wait}s...")
+        print(f"⏳ Aguardando confirmação: {os.path.basename(filename)} de {username}")
         
         start_time = time.time()
         check_interval = 5
-        found_download = False
         
         while time.time() - start_time < max_wait:
             try:
-                downloads = slskd.transfers.get_all_downloads()
+                download, dl_state = self.find_download_in_queue(slskd, filename, username)
                 
-                for download in downloads:
+                if download:
                     dl_filename = download.get('filename', '')
-                    dl_username = download.get('username', '')
-                    dl_state = download.get('state', '').lower()
+                    print(f"📥 Encontrado na fila: {os.path.basename(dl_filename)} - Status: {dl_state}")
                     
-                    # Busca por nome do arquivo ou usuário
-                    filename_match = (os.path.basename(dl_filename).lower() in os.path.basename(filename).lower() or
-                                    os.path.basename(filename).lower() in os.path.basename(dl_filename).lower())
-                    
-                    if filename_match and dl_username == username:
-                        found_download = True
-                        print(f"📥 Encontrado: {os.path.basename(dl_filename)} - Status: {dl_state}")
-                        
-                        if dl_state in ['completed', 'complete', 'finished']:
-                            print(f"✅ Download confirmado: {os.path.basename(dl_filename)}")
-                            return True
-                        elif dl_state in ['failed', 'error', 'cancelled']:
-                            print(f"❌ Download falhou: {dl_state}")
-                            return False
-                
-                if not found_download:
-                    print(f"🔍 Procurando download... ({int(time.time() - start_time)}s)")
+                    if dl_state in ['completed', 'complete', 'finished']:
+                        print(f"✅ Download confirmado: {os.path.basename(dl_filename)}")
+                        return True
+                    elif dl_state in ['failed', 'error', 'cancelled']:
+                        print(f"❌ Download falhou: {dl_state}")
+                        return False
+                    else:
+                        print(f"⏳ Em progresso: {dl_state} ({int(time.time() - start_time)}s)")
                 else:
-                    print(f"⏳ Aguardando conclusão... ({int(time.time() - start_time)}s)")
+                    print(f"🔍 Não encontrado na fila ({int(time.time() - start_time)}s)")
                 
                 time.sleep(check_interval)
                 
@@ -343,9 +356,10 @@ class PlaylistProcessor:
                 print(f"⚠️ Erro ao verificar downloads: {e}")
                 time.sleep(check_interval)
         
-        # Se não encontrou o download, assume sucesso (pode ter sido muito rápido)
-        if not found_download:
-            print(f"⚡ Download não encontrado na fila - assumindo sucesso")
+        # Verifica uma última vez após timeout
+        download, dl_state = self.find_download_in_queue(slskd, filename, username)
+        if download and dl_state in ['completed', 'complete', 'finished']:
+            print(f"✅ Download completado após timeout")
             return True
         
         print(f"⏰ Timeout - assumindo falha no download")
