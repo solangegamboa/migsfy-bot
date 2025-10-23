@@ -13,8 +13,7 @@ class TestDuplicateDetector:
         with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
             db_path = f.name
         
-        db = DatabaseManager(db_path)
-        db.init_database()
+        db = DatabaseManager(db_path)  # Já inicializa automaticamente
         detector = DuplicateDetector(db)
         
         yield detector

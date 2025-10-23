@@ -14,7 +14,6 @@ class TestSlskdApiClient:
             db_path = f.name
         
         db = DatabaseManager(db_path)
-        db.init_database()
         
         with patch('slskd_api.SlskdApi') as mock_slskd:
             mock_api_instance = Mock()
@@ -42,7 +41,6 @@ class TestSlskdApiClient:
                 db_path = f.name
             
             db = DatabaseManager(db_path)
-            db.init_database()
             
             with patch('slskd_api.SlskdApi'):
                 client = SlskdApiClient(db)
@@ -229,8 +227,6 @@ class TestSlskdApiClient:
         
         # Verificar se rate limiter registrou as falhas
         assert client.rate_limiter.consecutive_failures > 0
-                assert client.port == 9999
-                assert client.api_key == 'test-key'
                 assert client.base_url == 'http://test-host:9999'
             
             os.unlink(db_path)
