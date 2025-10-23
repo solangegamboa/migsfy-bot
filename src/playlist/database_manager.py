@@ -55,6 +55,15 @@ class DatabaseManager:
             )
             return cursor.fetchone() is not None
     
+    def is_failed_download(self, file_line: str) -> bool:
+        """Verifica se já tentou baixar e falhou (NOT_FOUND ou ERROR)"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT 1 FROM downloads WHERE file_line = ? AND status IN ('NOT_FOUND', 'ERROR')",
+                (file_line,)
+            )
+            return cursor.fetchone() is not None
+    
     def is_duplicate_normalized(self, filename_norm: str) -> bool:
         """Verificação por filename normalizado"""
         with sqlite3.connect(self.db_path) as conn:

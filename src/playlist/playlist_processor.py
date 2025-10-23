@@ -113,15 +113,16 @@ class PlaylistProcessor:
         # Extrair artista e música
         artist, song = self.duplicate_detector.extract_artist_song(file_line)
 
-        # Verificar duplicatas
-        is_duplicate, reason = self.duplicate_detector.check_all_duplicates(
-            file_line, "", artist, song
-        )
-
-        if is_duplicate:
-            print(f"⚠️ Duplicata detectada ({reason}): {file_line}")
+        # Verificar se já foi baixado com SUCESSO (só remove linha se sucesso)
+        if self.db_manager.is_downloaded(file_line):
+            print(f"✅ Já baixado com sucesso: {file_line}")
             self.stats["duplicates_found"] += 1
-            return True  # Remove linha (já temos)
+            return True  # Remove linha (já baixado com sucesso)
+
+        # Verificar se já tentou e falhou (NOT_FOUND) - não remove linha mas pula processamento
+        if self.db_manager.is_failed_download(file_line):
+            print(f"⏭️ Já tentado anteriormente (não encontrado): {file_line}")
+            return False  # Manter linha para tentar depois
 
         # Buscar música
         download_result = self._search_and_download(file_line, artist, song)
