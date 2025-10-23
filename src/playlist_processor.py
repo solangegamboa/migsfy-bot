@@ -273,6 +273,9 @@ class PlaylistProcessor:
         try:
             downloads = slskd.transfers.get_all_downloads()
 
+            # Extrai palavras-chave da linha de busca
+            search_words = [word.lower() for word in line.split() if len(word) > 2]
+            
             for download in downloads:
                 dl_username = download.get('username', '')
                 directories = download.get('directories', [])
@@ -285,17 +288,20 @@ class PlaylistProcessor:
                         dl_state = file_info.get('state', '').lower()
                         
                         # Extrai apenas o nome do arquivo
-                        filename_only = os.path.basename(dl_filename)
+                        filename_only = os.path.basename(dl_filename).lower()
                         
-                        # Busca por similaridade no nome do arquivo
-                        if any(word.lower() in filename_only.lower() for word in line.split() if len(word) > 3):
-                            print(f"📥 Já na fila: {filename_only} - Status: {dl_state}")
+                        # Verifica se pelo menos 2 palavras da busca estão no nome do arquivo
+                        matches = sum(1 for word in search_words if word in filename_only)
+                        
+                        if matches >= 2:  # Pelo menos 2 palavras devem coincidir
+                            print(f"📥 Encontrado na fila: {os.path.basename(dl_filename)}")
+                            print(f"    Status: {dl_state} | Usuário: {dl_username}")
                             
                             if dl_state in ['completed', 'complete', 'finished', 'completed, succeeded']:
-                                print(f"✅ Já completado na fila")
+                                print(f"✅ Já completado na fila - pulando")
                                 return True
                             elif dl_state in ['downloading', 'inprogress', 'queued', 'queued, remotely', 'pending']:
-                                print(f"⏳ Já em download - aguardando...")
+                                print(f"⏳ Já em download - aguardando conclusão...")
                                 return self.wait_for_download_completion(slskd, dl_filename, dl_username)
 
             return False

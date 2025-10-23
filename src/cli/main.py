@@ -1209,18 +1209,14 @@ def find_best_mp3(search_responses, search_text):
 def check_user_online(slskd, username):
     """Verifica se o usuário está online/conectado"""
     try:
-        # Tenta obter informações do usuário
-        user_info = slskd.users.get(username)
-
-        # Verifica status de conexão
-        status = user_info.get("status", "").lower()
-        is_online = status in ["online", "away"] or user_info.get("isOnline", False)
-
-        if is_online:
+        # Tenta fazer browse do usuário (mais confiável que status)
+        browse_result = slskd.users.browse(username)
+        
+        if browse_result and "directories" in browse_result:
             print(f"✅ Usuário {username} está online")
             return True
         else:
-            print(f"❌ Usuário {username} está offline (status: {status})")
+            print(f"❌ Usuário {username} não respondeu ao browse")
             return False
 
     except Exception as e:
@@ -1566,6 +1562,49 @@ def cleanup_search(slskd, search_id):
         print(f"⚠️ Erro ao remover busca: {e}")
 
 
+def check_existing_download_in_queue(slskd, query):
+    """Verifica se música já está na fila de download"""
+    try:
+        downloads = slskd.transfers.get_all_downloads()
+
+        # Extrai palavras-chave da busca
+        search_words = [word.lower() for word in query.split() if len(word) > 2]
+        
+        for download in downloads:
+            dl_username = download.get('username', '')
+            directories = download.get('directories', [])
+            
+            for directory in directories:
+                files = directory.get('files', [])
+                
+                for file_info in files:
+                    dl_filename = file_info.get('filename', '')
+                    dl_state = file_info.get('state', '').lower()
+                    
+                    # Extrai apenas o nome do arquivo
+                    filename_only = os.path.basename(dl_filename).lower()
+                    
+                    # Verifica se pelo menos 2 palavras da busca estão no nome do arquivo
+                    matches = sum(1 for word in search_words if word in filename_only)
+                    
+                    if matches >= 2:  # Pelo menos 2 palavras devem coincidir
+                        print(f"📥 Encontrado na fila: {os.path.basename(dl_filename)}")
+                        print(f"    Status: {dl_state} | Usuário: {dl_username}")
+                        
+                        if dl_state in ['completed', 'complete', 'finished', 'completed, succeeded']:
+                            print(f"✅ Já completado na fila - pulando")
+                            return True
+                        elif dl_state in ['downloading', 'inprogress', 'queued', 'queued, remotely', 'pending']:
+                            print(f"⏳ Já em download - aguardando conclusão...")
+                            return True
+
+        return False
+
+    except Exception as e:
+        print(f"⚠️ Erro ao verificar fila: {e}")
+        return False
+
+
 def smart_mp3_search(slskd, query):
     """Busca inteligente por MP3 com múltiplas variações"""
 
@@ -1579,6 +1618,11 @@ def smart_mp3_search(slskd, query):
     # Verifica se já foi baixado anteriormente
     if is_duplicate_download(query):
         print(f"⏭️ Pulando download - música já baixada anteriormente")
+        return False
+
+    # Verifica se já está na fila de download
+    if check_existing_download_in_queue(slskd, query):
+        print(f"⏭️ Pulando download - música já está na fila")
         return False
 
     artist, song = extract_artist_and_song(query)
@@ -1658,6 +1702,11 @@ def smart_album_search(slskd, query):
     # Verifica se já foi baixado anteriormente
     if is_duplicate_download(query):
         print(f"⏭️ Pulando download - álbum já baixado anteriormente")
+        return False
+
+    # Verifica se já está na fila de download
+    if check_existing_download_in_queue(slskd, query):
+        print(f"⏭️ Pulando download - álbum já está na fila")
         return False
 
     artist, album = extract_artist_and_album(query)
@@ -1980,6 +2029,11 @@ def smart_audiobook_search(slskd, query, custom_dir=None):
     # Verifica duplicatas
     if is_duplicate_download(query):
         print(f"⏭️ Pulando download - audiobook já baixado anteriormente")
+        return False
+    
+    # Verifica se já está na fila de download
+    if check_existing_download_in_queue(slskd, query):
+        print(f"⏭️ Pulando download - audiobook já está na fila")
         return False
     
     variations = create_audiobook_search_variations(query)
