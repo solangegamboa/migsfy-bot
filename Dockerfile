@@ -29,7 +29,7 @@ RUN chmod +x scripts/*.sh
 RUN mkdir -p /app/data /app/cache /app/logs
 
 # Setup cron job for playlist processor (hourly)
-RUN echo "0 * * * * cd /app && python3 src/playlist/main.py >> /app/logs/playlist-processor.log 2>&1" > /etc/cron.d/playlist-processor
+RUN echo "0 * * * * cd /app && /app/scripts/start-playlist-processor.sh >> /app/logs/playlist-processor.log 2>&1" > /etc/cron.d/playlist-processor
 RUN chmod 0644 /etc/cron.d/playlist-processor
 RUN crontab /etc/cron.d/playlist-processor
 

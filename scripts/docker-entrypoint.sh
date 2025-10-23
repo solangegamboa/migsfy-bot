@@ -65,7 +65,7 @@ fi
 
 # Start playlist processor immediately
 echo "🎵 Executando processador de playlists inicial..."
-cd /app && python3 src/playlist/main.py
+/app/scripts/start-playlist-processor.sh
 echo "✅ Processador de playlists executado"
 
 # Start cron service for scheduled runs
