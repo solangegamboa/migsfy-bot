@@ -1,31 +1,58 @@
 #!/bin/bash
 
-echo "🤖 SLSKD Music Bot - Telegram Edition"
-echo "====================================="
+# Script para executar o bot do Telegram
+# Pode ser usado tanto no Docker quanto localmente
 
-# Muda para o diretório raiz do projeto
-cd "$(dirname "$0")/.."
+set -e
 
-# Verifica se .env existe
-if [ ! -f ".env" ]; then
-    echo "❌ Arquivo .env não encontrado!"
-    echo "💡 Copie config/.env.example para .env e configure suas credenciais"
-    echo "💡 cp config/.env.example .env"
+# Detecta se está rodando no Docker
+if [ -d "/app" ] && [ -f "/app/.env" ]; then
+    echo "🐳 Executando no Docker"
+    cd /app
+    ENV_FILE="/app/.env"
+    LOG_FILE="/app/logs/telegram-bot.log"
+    PYTHON_PATH="/app/src"
+else
+    echo "💻 Executando localmente"
+    cd "$(dirname "$0")/.."
+    ENV_FILE=".env"
+    LOG_FILE="logs/telegram-bot.log"
+    PYTHON_PATH="src"
+fi
+
+# Verifica se o arquivo .env existe
+if [ ! -f "$ENV_FILE" ]; then
+    echo "❌ Arquivo .env não encontrado em: $ENV_FILE"
+    echo "💡 Copie o arquivo .env.example e configure suas credenciais"
     exit 1
 fi
 
-# Verifica se TELEGRAM_BOT_TOKEN está configurado
-if ! grep -q "TELEGRAM_BOT_TOKEN=" .env || grep -q "your_telegram_bot_token_here" .env; then
-    echo "❌ TELEGRAM_BOT_TOKEN não está configurado no .env"
-    echo "💡 Configure seu token do bot do Telegram"
-    echo "💡 Obtenha em: https://t.me/BotFather"
+# Verifica se o token do Telegram está configurado
+if ! grep -q "TELEGRAM_BOT_TOKEN" "$ENV_FILE" || grep -q "^TELEGRAM_BOT_TOKEN=$" "$ENV_FILE"; then
+    echo "❌ TELEGRAM_BOT_TOKEN não configurado no .env"
+    echo "💡 Configure o token do seu bot do Telegram no arquivo .env"
     exit 1
 fi
 
-echo "✅ Configuração encontrada"
-echo "🚀 Iniciando bot do Telegram..."
-echo "💡 Pressione Ctrl+C para parar"
-echo ""
+# Cria diretório de logs se não existir
+mkdir -p "$(dirname "$LOG_FILE")"
+
+# Exporta PYTHONPATH para encontrar os módulos
+export PYTHONPATH="$PYTHON_PATH:$PYTHONPATH"
+
+echo "🤖 Iniciando bot do Telegram..."
+echo "📁 Diretório: $(pwd)"
+echo "📝 Log: $LOG_FILE"
+echo "🐍 Python Path: $PYTHONPATH"
 
 # Executa o bot
-python3 src/telegram/bot.py
+if [ "$1" = "--daemon" ]; then
+    echo "🔄 Executando em modo daemon..."
+    nohup python3 -m src.telegram.bot > "$LOG_FILE" 2>&1 &
+    BOT_PID=$!
+    echo "✅ Bot iniciado em background (PID: $BOT_PID)"
+    echo "📝 Logs: tail -f $LOG_FILE"
+else
+    echo "▶️ Executando em modo interativo..."
+    python3 -m src.telegram.bot
+fi

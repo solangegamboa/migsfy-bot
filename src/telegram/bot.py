@@ -28,9 +28,18 @@ try:
     # Tenta importar do módulo CLI
     import sys
     import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'cli'))
     
-    from main import (
+    # Adiciona o diretório src ao Python path
+    src_path = os.path.join(os.path.dirname(__file__), '..')
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+    
+    # Adiciona o diretório cli ao Python path
+    cli_path = os.path.join(os.path.dirname(__file__), '..', 'cli')
+    if cli_path not in sys.path:
+        sys.path.insert(0, cli_path)
+    
+    from cli.main import (
         connectToSlskd, 
         smart_mp3_search,
         smart_album_search,
@@ -43,15 +52,22 @@ try:
         download_playlist_tracks_with_removal,
         download_playlist_tracks,
         show_download_history,
-        clear_download_history
+        clear_download_history,
+        process_spotify_playlist
     )
-except ImportError:
+    print("✅ Funções importadas do módulo cli.main")
+    
+except ImportError as e:
+    print(f"⚠️ Erro ao importar do módulo cli.main: {e}")
+    
     # Fallback para importação direta do arquivo
     try:
-        from slskd_mp3_search import (
+        from main import (
             connectToSlskd, 
             smart_mp3_search,
             smart_album_search,
+            list_audiobook_options,
+            download_audiobook_by_selection,
             setup_spotify_client, 
             setup_spotify_user_client,
             extract_playlist_id, 
@@ -59,37 +75,73 @@ except ImportError:
             download_playlist_tracks_with_removal,
             download_playlist_tracks,
             show_download_history,
-            clear_download_history
+            clear_download_history,
+            process_spotify_playlist
         )
-    except ImportError:
+        print("✅ Funções importadas do main.py")
+        
+    except ImportError as e2:
+        print(f"⚠️ Erro ao importar do main.py: {e2}")
+        
         # Se não conseguir importar como módulo, importa como script
-        import sys
-        import importlib.util
-        
-        # Tenta o novo caminho primeiro
-        main_path = os.path.join(os.path.dirname(__file__), '..', 'cli', 'main.py')
-        if os.path.exists(main_path):
-            spec = importlib.util.spec_from_file_location("main", main_path)
-        else:
-            # Fallback para o caminho antigo
-            spec = importlib.util.spec_from_file_location("slskd_mp3_search", "slskd-mp3-search.py")
-        
-        slskd_module = importlib.util.module_from_spec(spec)
-        sys.modules["slskd_mp3_search"] = slskd_module
-        spec.loader.exec_module(slskd_module)
-        
-        # Importa as funções necessárias
-    connectToSlskd = slskd_module.connectToSlskd
-    smart_mp3_search = slskd_module.smart_mp3_search
-    smart_album_search = slskd_module.smart_album_search
-    setup_spotify_client = slskd_module.setup_spotify_client
-    setup_spotify_user_client = slskd_module.setup_spotify_user_client
-    extract_playlist_id = slskd_module.extract_playlist_id
-    get_playlist_tracks_with_uris = slskd_module.get_playlist_tracks_with_uris
-    download_playlist_tracks_with_removal = slskd_module.download_playlist_tracks_with_removal
-    download_playlist_tracks = slskd_module.download_playlist_tracks
-    show_download_history = slskd_module.show_download_history
-    clear_download_history = slskd_module.clear_download_history
+        try:
+            import importlib.util
+            
+            # Tenta o novo caminho primeiro
+            main_path = os.path.join(os.path.dirname(__file__), '..', 'cli', 'main.py')
+            if os.path.exists(main_path):
+                spec = importlib.util.spec_from_file_location("main", main_path)
+                print(f"✅ Encontrado main.py em: {main_path}")
+            else:
+                # Fallback para o caminho antigo
+                root_path = os.path.join(os.path.dirname(__file__), '..', '..')
+                legacy_path = os.path.join(root_path, "slskd-mp3-search.py")
+                if os.path.exists(legacy_path):
+                    spec = importlib.util.spec_from_file_location("slskd_mp3_search", legacy_path)
+                    print(f"✅ Encontrado slskd-mp3-search.py em: {legacy_path}")
+                else:
+                    raise FileNotFoundError("Nenhum arquivo principal encontrado")
+            
+            slskd_module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = slskd_module
+            spec.loader.exec_module(slskd_module)
+            
+            # Importa as funções necessárias
+            connectToSlskd = slskd_module.connectToSlskd
+            smart_mp3_search = slskd_module.smart_mp3_search
+            smart_album_search = slskd_module.smart_album_search
+            
+            # Verifica se as funções existem no módulo
+            if hasattr(slskd_module, 'list_audiobook_options'):
+                list_audiobook_options = slskd_module.list_audiobook_options
+                download_audiobook_by_selection = slskd_module.download_audiobook_by_selection
+            else:
+                print("⚠️ Funções de audiobook não encontradas")
+                list_audiobook_options = None
+                download_audiobook_by_selection = None
+            
+            setup_spotify_client = slskd_module.setup_spotify_client
+            setup_spotify_user_client = slskd_module.setup_spotify_user_client
+            extract_playlist_id = slskd_module.extract_playlist_id
+            get_playlist_tracks_with_uris = slskd_module.get_playlist_tracks_with_uris
+            download_playlist_tracks_with_removal = slskd_module.download_playlist_tracks_with_removal
+            download_playlist_tracks = slskd_module.download_playlist_tracks
+            show_download_history = slskd_module.show_download_history
+            clear_download_history = slskd_module.clear_download_history
+            
+            # Verifica se process_spotify_playlist existe
+            if hasattr(slskd_module, 'process_spotify_playlist'):
+                process_spotify_playlist = slskd_module.process_spotify_playlist
+            else:
+                print("⚠️ Função process_spotify_playlist não encontrada")
+                process_spotify_playlist = None
+            
+            print("✅ Funções importadas via importlib")
+            
+        except Exception as e3:
+            print(f"❌ Erro fatal ao importar funções: {e3}")
+            print("💡 Verifique se os arquivos main.py ou slskd-mp3-search.py existem")
+            sys.exit(1)
 
 # Configuração de logging
 logging.basicConfig(

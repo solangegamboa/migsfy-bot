@@ -76,8 +76,19 @@ echo "✅ Cron iniciado - playlist processor a cada hora"
 # Start Telegram bot in background if configured
 if [ -f "/app/.env" ] && grep -q "TELEGRAM_BOT_TOKEN" /app/.env; then
     echo "🤖 Iniciando bot do Telegram em background..."
-    nohup python3 src/telegram/bot.py > /app/logs/telegram-bot.log 2>&1 &
-    echo "✅ Bot do Telegram iniciado (PID: $!)"
+    cd /app
+    nohup python3 -m src.telegram.bot > /app/logs/telegram-bot.log 2>&1 &
+    BOT_PID=$!
+    echo "✅ Bot do Telegram iniciado (PID: $BOT_PID)"
+    
+    # Aguarda alguns segundos para verificar se o bot iniciou corretamente
+    sleep 3
+    if kill -0 $BOT_PID 2>/dev/null; then
+        echo "✅ Bot do Telegram está rodando"
+    else
+        echo "❌ Bot do Telegram falhou ao iniciar, verificando logs..."
+        tail -20 /app/logs/telegram-bot.log
+    fi
 else
     echo "ℹ️ Bot do Telegram não configurado (TELEGRAM_BOT_TOKEN não encontrado no .env)"
 fi

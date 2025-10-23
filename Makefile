@@ -1,155 +1,85 @@
-# Makefile for SLSKD MP3 Search & Download Tool
+# Makefile para gerenciar o projeto migsfy-bot
 
-# Variables
-IMAGE_NAME = migsfy-bot
+.PHONY: help build run stop logs clean test telegram-bot
+
+# Variáveis
 CONTAINER_NAME = migsfy-bot
-VERSION = latest
+IMAGE_NAME = migsfy-bot
 
-# Get current user IDs (default to root)
-PUID := 0
-PGID := 0
-
-# Build the Docker image
-build:
-	@echo "🔨 Building Docker image..."
-	docker build -t $(IMAGE_NAME):$(VERSION) .
-
-# Build with no cache
-build-no-cache:
-	@echo "🔨 Building Docker image (no cache)..."
-	docker build --no-cache -t $(IMAGE_NAME):$(VERSION) .
-
-# Run the container interactively
-run:
-	@echo "🚀 Running container..."
-	docker run --rm -it \
-		-e PUID=$(PUID) \
-		-e PGID=$(PGID) \
-		-v $(PWD)/.env:/app/.env:ro \
-		-v $(PWD)/data:/app/data \
-		-v $(PWD)/cache:/app/cache \
-		$(IMAGE_NAME):$(VERSION)
-
-# Show current user IDs
-show-ids:
-	@echo "Current User IDs:"
-	@echo "PUID=$(PUID)"
-	@echo "PGID=$(PGID)"
-
-# Run Telegram bot
-telegram-bot:
-	@echo "🤖 Starting Telegram bot..."
-	docker run --rm -it \
-		-e PUID=$(PUID) \
-		-e PGID=$(PGID) \
-		-v $(PWD)/.env:/app/.env:ro \
-		-v $(PWD)/data:/app/data \
-		-v $(PWD)/cache:/app/cache \
-		$(IMAGE_NAME):$(VERSION) --telegram-bot
-
-# Run Telegram bot locally (without Docker)
-telegram-bot-local:
-	@echo "🤖 Starting Telegram bot locally..."
-	./scripts/run-telegram-bot.sh
-
-# Run with docker-compose
-up:
-	@echo "🚀 Starting with docker-compose..."
-	PUID=$(PUID) PGID=$(PGID) docker-compose up -d
-
-# Run with docker-compose (foreground)
-up-fg:
-	@echo "🚀 Starting with docker-compose (foreground)..."
-	PUID=$(PUID) PGID=$(PGID) docker-compose up
-
-# Stop docker-compose services
-down:
-	@echo "🛑 Stopping docker-compose services..."
-	docker-compose down
-
-# View logs
-logs:
-	@echo "📋 Viewing logs..."
-	docker-compose logs -f
-
-# Search for a song
-search:
-	@echo "🎵 Searching for song..."
-	@read -p "Enter search term: " term; \
-	docker run --rm -it \
-		-v $(PWD)/.env:/app/.env:ro \
-		-v $(PWD)/data:/app/data \
-		-v $(PWD)/cache:/app/cache \
-		$(IMAGE_NAME):$(VERSION) "$$term"
-
-# Download Spotify playlist
-playlist:
-	@echo "🎵 Downloading Spotify playlist..."
-	@read -p "Enter playlist URL: " url; \
-	docker run --rm -it \
-		-v $(PWD)/.env:/app/.env:ro \
-		-v $(PWD)/data:/app/data \
-		-v $(PWD)/cache:/app/cache \
-		$(IMAGE_NAME):$(VERSION) --playlist "$$url" --auto
-
-# Show download history
-history:
-	@echo "📋 Showing download history..."
-	docker run --rm -it \
-		-v $(PWD)/.env:/app/.env:ro \
-		-v $(PWD)/data:/app/data \
-		-v $(PWD)/cache:/app/cache \
-		$(IMAGE_NAME):$(VERSION) --history
-
-# Open interactive shell
-shell:
-	@echo "🐚 Opening interactive shell..."
-	docker run --rm -it \
-		-e PUID=$(PUID) \
-		-e PGID=$(PGID) \
-		-v $(PWD)/.env:/app/.env:ro \
-		-v $(PWD)/data:/app/data \
-		-v $(PWD)/cache:/app/cache \
-		--entrypoint bash \
-		$(IMAGE_NAME):$(VERSION)
-
-# Clean up Docker resources
-clean:
-	@echo "🧹 Cleaning up Docker resources..."
-	docker system prune -f
-	docker volume prune -f
-
-# Remove the image
-remove:
-	@echo "🗑️ Removing Docker image..."
-	docker rmi $(IMAGE_NAME):$(VERSION)
-
-# Show help
-help:
+help: ## Mostra esta ajuda
 	@echo "🎵 SLSKD MP3 Search & Download Tool - Docker Commands"
 	@echo ""
-	@echo "Available commands:"
-	@echo "  build              - Build the Docker image"
-	@echo "  build-no-cache     - Build the Docker image (no cache)"
-	@echo "  run                - Run the container interactively"
-	@echo "  show-ids           - Show current PUID and PGID"
-	@echo "  telegram-bot       - Start Telegram bot (Docker)"
-	@echo "  telegram-bot-local - Start Telegram bot (local)"
-	@echo "  up                 - Start with docker-compose (background)"
-	@echo "  up-fg              - Start with docker-compose (foreground)"
-	@echo "  down               - Stop docker-compose services"
-	@echo "  logs               - View container logs"
-	@echo "  search             - Search for a song"
-	@echo "  playlist           - Download Spotify playlist"
-	@echo "  history            - Show download history"
-	@echo "  shell              - Open interactive shell"
-	@echo "  clean              - Clean up Docker resources"
-	@echo "  remove             - Remove Docker image"
-	@echo "  help               - Show this help message"
-	@echo ""
-	@echo "🔐 Permission Management:"
-	@echo "  Default: PUID=0 PGID=0 (root user) for maximum compatibility"
-	@echo "  All Docker commands run as root by default"
-	@echo "  To use your user: PUID=\$(id -u) PGID=\$(id -g) make up"
+	@echo "Comandos disponíveis:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-.PHONY: build build-no-cache run show-ids telegram-bot telegram-bot-local up up-fg down logs search playlist history shell clean remove help
+build: ## Constrói a imagem Docker
+	@echo "🔨 Construindo imagem Docker..."
+	docker build -t $(IMAGE_NAME) .
+
+run: ## Executa o container em modo daemon
+	@echo "🚀 Iniciando container..."
+	docker run -d \
+		--name $(CONTAINER_NAME) \
+		--restart unless-stopped \
+		-v $(PWD)/.env:/app/.env:ro \
+		-v $(PWD)/data:/app/data \
+		-v $(PWD)/logs:/app/logs \
+		$(IMAGE_NAME) --daemon
+
+stop: ## Para o container
+	@echo "🛑 Parando container..."
+	docker stop $(CONTAINER_NAME) || true
+	docker rm $(CONTAINER_NAME) || true
+
+logs: ## Mostra logs do container
+	@echo "📝 Logs do container:"
+	docker logs -f $(CONTAINER_NAME)
+
+logs-telegram: ## Mostra logs específicos do bot do Telegram
+	@echo "🤖 Logs do bot do Telegram:"
+	docker exec $(CONTAINER_NAME) tail -f /app/logs/telegram-bot.log
+
+clean: ## Remove container e imagem
+	@echo "🧹 Limpando..."
+	docker stop $(CONTAINER_NAME) || true
+	docker rm $(CONTAINER_NAME) || true
+	docker rmi $(IMAGE_NAME) || true
+
+test: ## Testa se o bot funciona
+	@echo "🧪 Testando bot do Telegram..."
+	docker exec $(CONTAINER_NAME) python3 -c "from src.telegram.bot import TelegramMusicBot; print('✅ Bot OK')"
+
+telegram-bot: ## Executa apenas o bot do Telegram
+	@echo "🤖 Executando bot do Telegram..."
+	docker run -it --rm \
+		-v $(PWD)/.env:/app/.env:ro \
+		-v $(PWD)/data:/app/data \
+		-v $(PWD)/logs:/app/logs \
+		$(IMAGE_NAME) --telegram-bot
+
+shell: ## Abre shell no container
+	@echo "🐚 Abrindo shell no container..."
+	docker exec -it $(CONTAINER_NAME) bash
+
+restart: stop run ## Para e reinicia o container
+
+rebuild: clean build run ## Reconstrói e reinicia tudo
+
+status: ## Mostra status do container
+	@echo "📊 Status do container:"
+	@docker ps -a --filter name=$(CONTAINER_NAME) --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Comandos de desenvolvimento
+dev-build: ## Constrói imagem para desenvolvimento
+	@echo "🔨 Construindo imagem de desenvolvimento..."
+	docker build -t $(IMAGE_NAME):dev .
+
+dev-run: ## Executa em modo desenvolvimento com volumes
+	@echo "🚀 Iniciando em modo desenvolvimento..."
+	docker run -it --rm \
+		--name $(CONTAINER_NAME)-dev \
+		-v $(PWD)/.env:/app/.env:ro \
+		-v $(PWD)/src:/app/src \
+		-v $(PWD)/data:/app/data \
+		-v $(PWD)/logs:/app/logs \
+		$(IMAGE_NAME):dev bash

@@ -38,6 +38,7 @@ RUN echo "0 2 * * * /app/scripts/retry-failed-downloads.sh >> /app/logs/retry-fa
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src:/app
 ENV SPOTIFY_CACHE_PATH=/app/cache/.spotify_cache
 ENV PUID=0
 ENV PGID=0
