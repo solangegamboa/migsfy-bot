@@ -99,7 +99,7 @@ class PlaylistProcessor:
             else:
                 # Reescrever arquivo apenas com linhas não processadas
                 self._update_playlist_file(file_path, processed_lines)
-            
+
             self.stats["files_processed"] += 1
 
         except Exception as e:
@@ -229,7 +229,12 @@ class PlaylistProcessor:
     ) -> List[Dict]:
         """Ordena resultados por qualidade seguindo critérios do plano"""
         # Filtrar remixes e live
-        filtered = [r for r in results if "remix" not in r.get("filename", "").lower() and "live" not in r.get("filename", "").lower()]
+        filtered = [
+            r
+            for r in results
+            if "remix" not in r.get("filename", "").lower()
+            and "live" not in r.get("filename", "").lower()
+        ]
         print(f"🎯 Após filtrar remixes e live: {len(filtered)} resultados")
 
         # Filtrar usuários online primeiro
@@ -289,7 +294,7 @@ class PlaylistProcessor:
                 score += 1
 
             # 6 - Arquivo não locked: +10 pontos
-            if not result.get('isLocked', True):
+            if not result.get("isLocked", True):
                 score += 10
 
             return score
@@ -351,7 +356,7 @@ class PlaylistProcessor:
                 freq_pts = 0
 
             # isLocked pontuação
-            locked_pts = 10 if not result.get('isLocked', True) else 0
+            locked_pts = 10 if not result.get("isLocked", True) else 0
 
             print(f"  {i+1}. Score {total_score}: {filename_only}")
             print(
@@ -379,7 +384,9 @@ class PlaylistProcessor:
             return self._monitor_download(file_line, existing_download, result)
 
         # Adicionar à fila
-        download_id = self.slskd_client.add_download(username, filename, result.get('size', 0))
+        download_id = self.slskd_client.add_download(
+            username, filename, result.get("size", 0)
+        )
 
         if not download_id:
             print(f"❌ Falha ao adicionar download à fila")
@@ -430,7 +437,7 @@ class PlaylistProcessor:
                     self._handle_download_success(file_line, download_info, result)
                     return "SUCCESS"
 
-                elif state in ["Completed, Errored", "Completed, Canceled"]:
+                elif state in ["Completed, Errored", "Completed, Cancelled"]:
                     self._handle_download_error(file_line, download_info, state)
                     return "ERROR"
 
