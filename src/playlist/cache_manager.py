@@ -6,7 +6,7 @@ from datetime import datetime
 class CacheManager:
     def __init__(self, db_manager):
         self.db_manager = db_manager
-        self.ttl_hours = int(os.getenv('CACHE_TTL_HOURS', 24))
+        self.ttl_hours = int(os.getenv('CACHE_TTL_HOURS', 12))
         self.auto_cleanup = os.getenv('AUTO_CLEANUP_CACHE', 'true').lower() == 'true'
         
     def get_query_hash(self, query: str) -> str:
