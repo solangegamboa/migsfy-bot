@@ -344,7 +344,7 @@ class PlaylistProcessor:
                 self.remove_line_from_file(file_path, line)
             
             # Pausa entre downloads
-            time.sleep(30)
+            time.sleep(60)
         
         print(f"📊 {file_path}: {downloaded} baixadas, {skipped} puladas, {processed} processadas")
     
@@ -449,7 +449,7 @@ class PlaylistProcessor:
                 self.mark_as_failed(line)
                 failed += 1
             
-            time.sleep(30)
+            time.sleep(60)
         
         print(f"\n📊 Retry concluído: {successful} sucessos, {failed} falhas")
     
