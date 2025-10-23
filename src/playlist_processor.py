@@ -181,9 +181,71 @@ class PlaylistProcessor:
             print(f"❌ Erro ao conectar slskd: {e}")
             return None
     
+    def show_download_queue(self, slskd):
+        """Mostra fila de downloads atual"""
+        try:
+            downloads = slskd.transfers.get_all_downloads()
+            
+            if not downloads:
+                print("📋 Fila de downloads vazia")
+                return
+            
+            print(f"📋 Fila de downloads ({len(downloads)} itens):")
+            for i, download in enumerate(downloads, 1):
+                dl_filename = os.path.basename(download.get('filename', ''))
+                dl_state = download.get('state', '').lower()
+                dl_username = download.get('username', '')
+                
+                status_emoji = {
+                    'completed': '✅',
+                    'complete': '✅', 
+                    'finished': '✅',
+                    'downloading': '📥',
+                    'queued': '⏳',
+                    'pending': '⏳',
+                    'failed': '❌',
+                    'error': '❌',
+                    'cancelled': '❌'
+                }.get(dl_state, '🔄')
+                
+                print(f"  {i:2d}. {status_emoji} {dl_filename} ({dl_state}) - {dl_username}")
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao mostrar fila: {e}")
+    
+    def check_existing_download(self, slskd, line):
+        """Verifica se música já está na fila de download"""
+        try:
+            downloads = slskd.transfers.get_all_downloads()
+            
+            for download in downloads:
+                dl_filename = download.get('filename', '')
+                dl_state = download.get('state', '').lower()
+                
+                # Busca por similaridade no nome
+                if any(word.lower() in dl_filename.lower() for word in line.split() if len(word) > 3):
+                    print(f"📥 Já na fila: {os.path.basename(dl_filename)} - Status: {dl_state}")
+                    
+                    if dl_state in ['completed', 'complete', 'finished']:
+                        print(f"✅ Já completado na fila")
+                        return True
+                    elif dl_state in ['downloading', 'queued', 'pending']:
+                        print(f"⏳ Já em download - aguardando...")
+                        return self.wait_for_download_completion(slskd, dl_filename, download.get('username', ''))
+            
+            return False
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao verificar fila: {e}")
+            return False
+    
     def download_track(self, slskd, line):
         """Baixa uma música e aguarda confirmação de sucesso"""
         try:
+            # Verifica se já está na fila
+            if self.check_existing_download(slskd, line):
+                return True
+            
             from cli.main import create_search_variations, wait_for_search_completion, find_best_mp3, smart_download_with_fallback
             import os
             
@@ -332,6 +394,9 @@ class PlaylistProcessor:
         slskd = self.connect_slskd()
         if not slskd:
             return
+        
+        # Mostra fila atual
+        self.show_download_queue(slskd)
         
         processed = 0
         downloaded = 0
