@@ -180,8 +180,9 @@ class PlaylistProcessor:
 
         if len(parts) >= 3:
             artist = parts[0].strip()
-            album = parts[1].strip()
-            song = parts[2].strip()
+            # Junta todas as partes do meio como álbum
+            album = " - ".join(parts[1:-1]).strip()
+            song = parts[-1].strip()
         elif len(parts) == 2:
             artist = parts[0].strip()
             album = ""

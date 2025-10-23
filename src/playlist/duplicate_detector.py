@@ -111,7 +111,8 @@ class DuplicateDetector:
         
         if len(parts) >= 3:
             # Formato: ARTISTA - ALBUM - MUSICA
-            return parts[0].strip(), parts[2].strip()
+            # Pega primeiro como artista e último como música
+            return parts[0].strip(), parts[-1].strip()
         elif len(parts) == 2:
             # Formato: ARTISTA - MUSICA
             return parts[0].strip(), parts[1].strip()
