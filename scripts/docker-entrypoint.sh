@@ -73,6 +73,15 @@ echo "⏰ Iniciando serviço cron para execuções agendadas..."
 service cron start
 echo "✅ Cron iniciado - playlist processor a cada hora"
 
+# Start Telegram bot in background if configured
+if [ -f "/app/.env" ] && grep -q "TELEGRAM_BOT_TOKEN" /app/.env; then
+    echo "🤖 Iniciando bot do Telegram em background..."
+    nohup python3 src/telegram/bot.py > /app/logs/telegram-bot.log 2>&1 &
+    echo "✅ Bot do Telegram iniciado (PID: $!)"
+else
+    echo "ℹ️ Bot do Telegram não configurado (TELEGRAM_BOT_TOKEN não encontrado no .env)"
+fi
+
 # Check if .env file exists
 if [ ! -f "/app/.env" ]; then
     echo "⚠️ Warning: .env file not found!"
