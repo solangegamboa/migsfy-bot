@@ -15,6 +15,7 @@ from .process_lock import ProcessLock
 from .rate_limiter import RateLimiter
 from .cache_manager import CacheManager
 from .slskd_api_client import SlskdApiClient
+from .playlist_processor import PlaylistProcessor
 
 __all__ = [
     "DatabaseManager",
@@ -22,5 +23,6 @@ __all__ = [
     "ProcessLock",
     "RateLimiter",
     "CacheManager",
-    "SlskdApiClient"
+    "SlskdApiClient",
+    "PlaylistProcessor"
 ]
