@@ -8,13 +8,19 @@ Inclui controle de duplicatas, rate limiting e cache inteligente.
 __version__ = "1.0.0"
 __author__ = "Solia Assistant"
 
-# Importar apenas classes já implementadas
+# Importar classes implementadas
 from .database_manager import DatabaseManager
 from .duplicate_detector import DuplicateDetector
 from .process_lock import ProcessLock
+from .rate_limiter import RateLimiter
+from .cache_manager import CacheManager
+from .slskd_api_client import SlskdApiClient
 
 __all__ = [
     "DatabaseManager",
     "DuplicateDetector", 
-    "ProcessLock"
+    "ProcessLock",
+    "RateLimiter",
+    "CacheManager",
+    "SlskdApiClient"
 ]
