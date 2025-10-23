@@ -34,6 +34,8 @@ try:
         connectToSlskd, 
         smart_mp3_search,
         smart_album_search,
+        list_audiobook_options,
+        download_audiobook_by_selection,
         setup_spotify_client, 
         setup_spotify_user_client,
         extract_playlist_id, 
@@ -369,6 +371,11 @@ Exemplo: `/search Linkin Park - In the End`
 `/album <artista - álbum>` - Busca álbum completo
 🆕 **Novo:** Mostra os 5 melhores álbuns encontrados para você escolher!
 Exemplo: `/album Pink Floyd - The Dark Side of the Moon`
+
+**Busca de Audiobook:**
+`/audiobook <autor - título>` - Lista opções de audiobooks com botões
+Exemplo: `/audiobook Stephen King - IT`
+🎯 **Novo:** Seleção com botões inline - sem digitar comandos!
 
 **Spotify:**
 `/spotify <url>` - Adiciona playlist à fila de processamento
@@ -823,6 +830,127 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
                 parse_mode='Markdown'
             )
     
+    async def audiobook_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Comando /audiobook para listar opções de audiobooks"""
+        if not self._is_authorized(update):
+            return
+        
+        if not self.slskd:
+            await update.message.reply_text("❌ SLSKD não está conectado")
+            return
+        
+        if not context.args:
+            await update.message.reply_text(
+                "❌ **Comando Incompleto**\n\n"
+                "**Uso:**\n"
+                "`/audiobook <autor - título>`\n\n"
+                "**Exemplos:**\n"
+                "• `/audiobook Stephen King - IT`\n"
+                "• `/audiobook George Orwell - 1984`\n"
+                "• `/audiobook Agatha Christie - Murder on the Orient Express`\n\n"
+                "📚 **Como funciona:**\n"
+                "1. Busca em todos os formatos de audiobook (M4B, M4A, MP3)\n"
+                "2. Apresenta até 10 melhores opções com botões\n"
+                "3. Clique no botão do audiobook desejado para baixar\n"
+                "4. Prioriza formatos M4B e M4A (melhores para audiobooks)",
+                parse_mode='Markdown'
+            )
+            return
+        
+        audiobook_query = ' '.join(context.args)
+        
+        # Mensagem de progresso
+        progress_msg = await update.message.reply_text(
+            f"📚 **Buscando audiobooks: {audiobook_query}**\n\n"
+            f"🔍 Procurando nos formatos M4B, M4A, MP3...\n"
+            f"_Por favor, aguarde..._",
+            parse_mode='Markdown'
+        )
+        
+        try:
+            # Executa busca em thread separada
+            loop = asyncio.get_event_loop()
+            options = await loop.run_in_executor(None, list_audiobook_options, self.slskd, audiobook_query, 10)
+            
+            if options:
+                # Monta mensagem com opções e botões inline
+                text = f"📚 **Audiobooks encontrados: {audiobook_query}**\n\n"
+                text += "📋 Selecione um audiobook para baixar:\n\n"
+                
+                # Botões para cada audiobook
+                keyboard = []
+                
+                for i, option in enumerate(options, 1):
+                    filename = os.path.basename(option['filename'])
+                    size_mb = option['size'] / 1024 / 1024
+                    username = option['username']
+                    
+                    # Detecta formato
+                    ext = os.path.splitext(filename)[1].lower()
+                    format_emoji = {
+                        '.m4b': '📚',
+                        '.m4a': '🎧', 
+                        '.mp3': '🎵',
+                        '.aac': '🔊',
+                        '.flac': '🎼'
+                    }.get(ext, '📄')
+                    
+                    # Limita tamanho do nome do arquivo para exibição
+                    display_name = filename[:50] + "..." if len(filename) > 50 else filename
+                    
+                    text += f"{i:2d}. {format_emoji} {display_name}\n"
+                    text += f"     👤 {username} | 💾 {size_mb:.1f}MB\n\n"
+                    
+                    # Botão para este audiobook
+                    button_text = f"{format_emoji} {i}. {filename[:30]}..." if len(filename) > 30 else f"{format_emoji} {i}. {filename}"
+                    if len(button_text) > 64:  # Limite do Telegram
+                        button_text = f"{format_emoji} {i}. Audiobook {i}"
+                    
+                    callback_data = f"audiobook_select_{i}"
+                    keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+                
+                # Botão de cancelar
+                keyboard.append([InlineKeyboardButton("❌ Cancelar", callback_data="audiobook_cancel")])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # Salva opções temporariamente para uso nos callbacks
+                if not hasattr(self, '_audiobook_options_cache'):
+                    self._audiobook_options_cache = {}
+                
+                cache_key = f"{update.effective_user.id}_{update.effective_chat.id}"
+                self._audiobook_options_cache[cache_key] = {
+                    'options': options,
+                    'query': audiobook_query,
+                    'timestamp': datetime.now()
+                }
+                
+                await progress_msg.edit_text(text, parse_mode='Markdown', reply_markup=reply_markup)
+            else:
+                await progress_msg.edit_text(
+                    f"❌ **Nenhum audiobook encontrado**\n\n"
+                    f"Não foi possível encontrar audiobooks para: *{audiobook_query}*\n\n"
+                    f"**Sugestões:**\n"
+                    f"• Verifique a grafia do autor e título\n"
+                    f"• Tente apenas o título: `/audiobook 1984`\n"
+                    f"• Tente apenas o autor: `/audiobook Stephen King`\n"
+                    f"• Use termos em inglês se aplicável",
+                    parse_mode='Markdown'
+                )
+        
+        except Exception as e:
+            await progress_msg.edit_text(
+                f"❌ **Erro na busca de audiobooks**\n\n"
+                f"Ocorreu um erro: `{str(e)}`\n\n"
+                f"**Possíveis soluções:**\n"
+                f"• Verifique se o servidor SLSKD está online\n"
+                f"• Tente novamente em alguns minutos\n"
+                f"• Tente com termos de busca diferentes",
+                parse_mode='Markdown'
+            )
+    
+
+    
     async def lastfm_album_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /lastfm_album para baixar todas as músicas de um álbum do Last.fm via URL"""
         if not self._is_authorized(update):
@@ -1168,6 +1296,13 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
             # Processa seleção de música
             await self._handle_music_selection(query)
         
+        elif query.data == "audiobook_cancel":
+            await query.edit_message_text("❌ Seleção de audiobook cancelada")
+        
+        elif query.data.startswith("audiobook_select_"):
+            # Processa seleção de audiobook
+            await self._handle_audiobook_selection(query)
+        
         elif query.data.startswith("cancel_"):
             # Extrai o task_id do callback data
             task_id = query.data[7:]  # Remove "cancel_" prefix
@@ -1189,6 +1324,93 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
                     await query.edit_message_text("❌ Você não tem permissão para cancelar esta tarefa")
             else:
                 await query.edit_message_text("❌ Tarefa não encontrada ou já foi concluída")
+    
+    async def _handle_audiobook_selection(self, query):
+        """Manipula seleção de audiobook pelo usuário"""
+        try:
+            # Parse do callback data: audiobook_select_{number}
+            selection = int(query.data.split('_')[-1])
+            
+            # Recupera opções do cache
+            cache_key = f"{query.from_user.id}_{query.message.chat_id}"
+            
+            if not hasattr(self, '_audiobook_options_cache') or cache_key not in self._audiobook_options_cache:
+                await query.edit_message_text(
+                    "❌ **Busca expirada**\n\n"
+                    "Faça uma nova busca com `/audiobook <busca>`",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            cache_data = self._audiobook_options_cache[cache_key]
+            options = cache_data['options']
+            query_text = cache_data['query']
+            
+            if selection < 1 or selection > len(options):
+                await query.edit_message_text(
+                    f"❌ **Número inválido**\n\n"
+                    f"Escolha um número entre 1 e {len(options)}",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            selected_option = options[selection - 1]
+            
+            # Inicia download
+            filename = os.path.basename(selected_option['filename'])
+            username = selected_option['username']
+            size_mb = selected_option['size'] / 1024 / 1024
+            
+            await query.edit_message_text(
+                f"📚 **Baixando audiobook selecionado**\n\n"
+                f"📄 {filename}\n"
+                f"👤 Usuário: {username}\n"
+                f"💾 Tamanho: {size_mb:.1f} MB\n\n"
+                f"⏳ Iniciando download...\n"
+                f"💡 Monitore o progresso na interface web do slskd",
+                parse_mode='Markdown'
+            )
+            
+            # Executa download em thread separada com diretório /audiobooks/
+            loop = asyncio.get_event_loop()
+            success = await loop.run_in_executor(
+                None, download_audiobook_by_selection, 
+                self.slskd, selected_option, query_text, "/audiobooks/"
+            )
+            
+            if success:
+                await query.edit_message_text(
+                    f"✅ **Audiobook baixado com sucesso!**\n\n"
+                    f"📄 {filename}\n"
+                    f"👤 Usuário: {username}\n"
+                    f"💾 Tamanho: {size_mb:.1f} MB\n"
+                    f"📁 Pasta: `/audiobooks/`\n\n"
+                    f"💡 O download foi iniciado. Monitore o progresso na interface web do slskd",
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.edit_message_text(
+                    f"❌ **Falha no download**\n\n"
+                    f"Não foi possível baixar o audiobook selecionado.\n\n"
+                    f"**Possíveis causas:**\n"
+                    f"• Usuário offline\n"
+                    f"• Arquivo não disponível\n"
+                    f"• Problema de conectividade\n\n"
+                    f"💡 Tente outro audiobook da lista",
+                    parse_mode='Markdown'
+                )
+            
+            # Remove do cache após uso
+            if cache_key in self._audiobook_options_cache:
+                del self._audiobook_options_cache[cache_key]
+        
+        except Exception as e:
+            await query.edit_message_text(
+                f"❌ **Erro ao processar seleção**\n\n"
+                f"Erro: `{str(e)}`\n\n"
+                f"Faça uma nova busca com `/audiobook <busca>`",
+                parse_mode='Markdown'
+            )
     
     async def _handle_album_selection(self, query):
         """Manipula seleção de álbum pelo usuário"""
@@ -2389,6 +2611,7 @@ _Obs: Músicas já baixadas anteriormente serão puladas. Processo totalmente au
             application.add_handler(CommandHandler("lastfm_tag", self.lastfm_tag_command))
             application.add_handler(CommandHandler("lastfm_artist", self.lastfm_artist_command))
             application.add_handler(CommandHandler("lastfm_album", self.lastfm_album_command))
+            application.add_handler(CommandHandler("audiobook", self.audiobook_command))
             application.add_handler(CallbackQueryHandler(self.handle_callback_query))
             
             # Adiciona handler de erro

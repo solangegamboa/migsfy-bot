@@ -28,6 +28,11 @@ RUN chmod +x scripts/*.sh
 # Create directories for data persistence
 RUN mkdir -p /app/data /app/cache /app/logs
 
+# Setup cron job for retry failed downloads (daily at 2 AM)
+RUN echo "0 2 * * * /app/scripts/retry-failed-downloads.sh >> /app/logs/retry-failed.log 2>&1" > /etc/cron.d/retry-failed
+RUN chmod 0644 /etc/cron.d/retry-failed
+RUN crontab /etc/cron.d/retry-failed
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV SPOTIFY_CACHE_PATH=/app/cache/.spotify_cache

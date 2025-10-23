@@ -946,6 +946,47 @@ def create_album_search_variations(search_text):
     return unique_variations
 
 
+def create_audiobook_search_variations(search_text):
+    """Cria variações de busca específicas para audiobooks"""
+    variations = []
+    
+    # Busca direta com formatos de audiobook (sem palavra 'audiobook')
+    variations.extend([
+        f"{search_text} m4b",
+        f"{search_text} m4a",
+        f"{search_text} mp3",
+        f"{search_text} *.m4b",
+        f"{search_text} *.m4a",
+        f'"{search_text}" m4b',
+        f'"{search_text}" m4a',
+    ])
+    
+    # Se contém autor e título
+    if " - " in search_text:
+        author, title = search_text.split(" - ", 1)
+        variations.extend([
+            f"{title} {author} m4b",
+            f"{title} {author} m4a",
+            f"{author} {title} m4b",
+            f"{author} {title} m4a",
+        ])
+    
+    # Wildcards para busca mais ampla
+    variations.extend([
+        f"*{search_text}* m4b",
+        f"*{search_text}* m4a",
+    ])
+    
+    # Remove duplicatas
+    seen = set()
+    unique_variations = []
+    for var in variations:
+        if var and var not in seen:
+            seen.add(var)
+            unique_variations.append(var)
+    
+    return unique_variations[:8]
+
 def create_search_variations(search_text):
     """Cria variações de busca priorizando música sem artista primeiro"""
     artist, song = extract_artist_and_song(search_text)
@@ -1004,6 +1045,55 @@ def calculate_similarity(search_text, filename):
     return similarity
 
 
+def score_audiobook_file(file_info, search_text):
+    """Pontua arquivo de audiobook baseado em critérios de qualidade"""
+    filename = file_info.get("filename", "")
+    size = file_info.get("size", 0)
+    
+    # FILTRO OBRIGATÓRIO: Apenas formatos de audiobook
+    audiobook_extensions = [".m4b", ".m4a", ".mp3", ".aac", ".flac"]
+    if not any(filename.lower().endswith(ext) for ext in audiobook_extensions):
+        return 0
+    
+    # Pontução base por similaridade
+    similarity_score = calculate_similarity(search_text, filename) * 100
+    
+    # Bônus por formato preferido
+    format_bonus = 0
+    if filename.lower().endswith(".m4b"):
+        format_bonus = 40  # M4B é o melhor formato para audiobooks
+    elif filename.lower().endswith(".m4a"):
+        format_bonus = 30
+    elif filename.lower().endswith(".mp3"):
+        format_bonus = 20
+    elif filename.lower().endswith(".aac"):
+        format_bonus = 15
+    elif filename.lower().endswith(".flac"):
+        format_bonus = 10
+    
+    # Bônus por tamanho (audiobooks são grandes)
+    size_bonus = 0
+    if size > 100 * 1024 * 1024:  # > 100MB
+        size_bonus = 30
+    elif size > 50 * 1024 * 1024:  # > 50MB
+        size_bonus = 20
+    elif size > 20 * 1024 * 1024:  # > 20MB
+        size_bonus = 10
+    
+    # Bônus por palavras-chave de audiobook
+    filename_lower = filename.lower()
+    audiobook_keywords = ["audiobook", "unabridged", "narrated", "read by"]
+    keyword_bonus = sum(15 for keyword in audiobook_keywords if keyword in filename_lower)
+    
+    # Penalidades
+    penalty = 0
+    bad_words = ["sample", "preview", "demo", "excerpt", "chapter 1"]
+    if any(word in filename_lower for word in bad_words):
+        penalty = -30
+    
+    total_score = similarity_score + format_bonus + size_bonus + keyword_bonus + penalty
+    return max(0, total_score)
+
 def score_mp3_file(file_info, search_text):
     """Pontua arquivo MP3 baseado em critérios de qualidade"""
     filename = file_info.get("filename", "")
@@ -1049,6 +1139,39 @@ def score_mp3_file(file_info, search_text):
     total_score = similarity_score + quality_bonus + size_bonus + penalty
     return max(0, total_score)
 
+
+def find_best_audiobook(search_responses, search_text):
+    """Encontra o melhor arquivo de audiobook"""
+    best_file = None
+    best_score = 0
+    best_user = None
+
+    total_files = 0
+    audiobook_files = 0
+
+    for response in search_responses:
+        username = response.get("username", "")
+        files = response.get("files", [])
+
+        for file_info in files:
+            total_files += 1
+            filename = file_info.get("filename", "")
+
+            audiobook_extensions = [".m4b", ".m4a", ".mp3", ".aac", ".flac"]
+            if not any(filename.lower().endswith(ext) for ext in audiobook_extensions):
+                continue
+
+            audiobook_files += 1
+            score = score_audiobook_file(file_info, search_text)
+
+            if score > best_score:
+                best_score = score
+                best_file = file_info
+                best_user = username
+
+    print(f"📊 Arquivos analisados: {total_files} | Audiobooks: {audiobook_files}")
+
+    return best_file, best_user, best_score
 
 def find_best_mp3(search_responses, search_text):
     """Encontra o melhor arquivo MP3"""
@@ -1124,6 +1247,52 @@ def get_user_browse_info(slskd, username):
         print(f"⚠️ Browse falhou para {username}: {e}")
         return False
 
+
+def download_audiobook(slskd, username, filename, file_size=0, search_term=None, custom_dir=None):
+    """Inicia download do audiobook com diretório personalizado"""
+    try:
+        print(f"🔍 Verificando conectividade do usuário {username}...")
+
+        # Primeira verificação: status do usuário
+        user_online = check_user_online(slskd, username)
+
+        if not user_online:
+            print(f"⚠️ Usuário parece offline, tentando browse para confirmar...")
+            browse_ok = get_user_browse_info(slskd, username)
+            if not browse_ok:
+                print(f"❌ Usuário {username} não está respondendo - pulando download")
+                return False
+
+        print(f"📥 Iniciando download de audiobook: {os.path.basename(filename)}")
+        
+        # Configura diretório personalizado se fornecido
+        file_dict = {"filename": filename, "size": file_size}
+        
+        # Se diretório personalizado foi especificado, tenta configurar
+        if custom_dir:
+            try:
+                # Verifica se slskd suporta diretório personalizado
+                print(f"📁 Tentando salvar em: {custom_dir}")
+                # Nota: slskd pode não suportar diretório personalizado por arquivo
+                # Neste caso, o arquivo será baixado no diretório padrão
+            except:
+                print(f"⚠️ Diretório personalizado não suportado, usando padrão")
+
+        slskd.transfers.enqueue(username, [file_dict])
+        print(f"✅ Download de audiobook enfileirado com sucesso!")
+        
+        if custom_dir:
+            print(f"📝 Nota: Mova manualmente para {custom_dir} após o download")
+
+        # Adiciona ao histórico
+        if search_term:
+            add_to_download_history(search_term, filename, username, file_size)
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Erro no download: {e}")
+        return False
 
 def download_mp3(slskd, username, filename, file_size=0, search_term=None):
     """Inicia download do MP3 com verificação de usuário online e histórico"""
@@ -1747,6 +1916,162 @@ def download_album_tracks(slskd, album_info, search_term):
     return False
 
 
+def list_audiobook_options(slskd, query, limit=10):
+    """Lista opções de audiobooks para seleção no Telegram"""
+    print(f"📚 Listando opções de audiobook: '{query}'")
+    
+    variations = create_audiobook_search_variations(query)
+    print(f"📝 Variações criadas: {variations}")
+    all_options = []
+    
+    # Executa todas as buscas e acumula resultados
+    for i, search_term in enumerate(variations, 1):
+        try:
+            print(f"🔍 Busca {i}/{len(variations)}: '{search_term}'")
+            search_result = slskd.searches.search_text(search_term)
+            search_id = search_result.get("id")
+            
+            search_responses = wait_for_search_completion(
+                slskd, search_id, max_wait=15
+            )
+            
+            if search_responses:
+                total_files = sum(len(response.get("files", [])) for response in search_responses)
+                print(f"📊 Arquivos encontrados: {total_files}")
+                
+                # Coleta todos os audiobooks encontrados
+                found_in_this_search = 0
+                for response in search_responses:
+                    username = response.get("username", "")
+                    files = response.get("files", [])
+                    
+                    for file_info in files:
+                        filename = file_info.get("filename", "")
+                        audiobook_extensions = [".m4b", ".m4a", ".mp3", ".aac", ".flac"]
+                        
+                        if any(filename.lower().endswith(ext) for ext in audiobook_extensions):
+                            score = score_audiobook_file(file_info, query)
+                            
+                            if score > 10:  # Score mínimo reduzido
+                                all_options.append({
+                                    'filename': filename,
+                                    'username': username,
+                                    'size': file_info.get('size', 0),
+                                    'score': score,
+                                    'file_info': file_info
+                                })
+                                found_in_this_search += 1
+                
+                print(f"✅ Audiobooks válidos nesta busca: {found_in_this_search}")
+            else:
+                print(f"❌ Nenhuma resposta para '{search_term}'")
+        
+        except Exception as e:
+            print(f"⚠️ Erro na busca '{search_term}': {e}")
+            continue  # Continua para próxima busca mesmo com erro
+    
+    print(f"📋 Total de opções coletadas de todas as buscas: {len(all_options)}")
+    
+    # Remove duplicatas e ordena por score
+    unique_options = {}
+    for option in all_options:
+        key = f"{option['username']}:{os.path.basename(option['filename'])}"
+        if key not in unique_options or option['score'] > unique_options[key]['score']:
+            unique_options[key] = option
+    
+    # Ordena por score e limita a 10 melhores
+    sorted_options = sorted(unique_options.values(), key=lambda x: x['score'], reverse=True)
+    final_options = sorted_options[:10]  # Sempre limita a 10
+    
+    print(f"✅ Opções únicas após filtro: {len(sorted_options)}")
+    print(f"📋 Apresentando os {len(final_options)} melhores audiobooks encontrados")
+    
+    # Mostra os resultados finais
+    if final_options:
+        print(f"\n📚 Top {len(final_options)} audiobooks encontrados:")
+        for i, option in enumerate(final_options, 1):
+            filename = os.path.basename(option['filename'])
+            size_mb = option['size'] / 1024 / 1024
+            print(f"{i:2d}. {filename} ({size_mb:.1f}MB) - Score: {option['score']:.1f} - {option['username']}")
+    
+    return final_options
+
+def download_audiobook_by_selection(slskd, option, query, custom_dir=None):
+    """Baixa audiobook selecionado da lista"""
+    return download_audiobook(
+        slskd, option['username'], option['filename'], 
+        option['size'], query, custom_dir
+    )
+
+def smart_audiobook_search(slskd, query, custom_dir=None):
+    """Busca inteligente por audiobooks"""
+    print(f"📚 Busca inteligente por AUDIOBOOK: '{query}'")
+    
+    if custom_dir:
+        print(f"📁 Diretório personalizado: {custom_dir}")
+    
+    # Verifica duplicatas
+    if is_duplicate_download(query):
+        print(f"⏭️ Pulando download - audiobook já baixado anteriormente")
+        return False
+    
+    variations = create_audiobook_search_variations(query)
+    print(f"📝 {len(variations)} variações criadas para audiobook")
+    
+    for i, search_term in enumerate(variations, 1):
+        print(f"\n📍 Tentativa {i}/{len(variations)}: '{search_term}'")
+        
+        try:
+            print(f"🔍 Buscando audiobook: '{search_term}'")
+            
+            search_result = slskd.searches.search_text(search_term)
+            search_id = search_result.get("id")
+            
+            search_responses = wait_for_search_completion(
+                slskd, search_id, max_wait=int(os.getenv("SEARCH_WAIT_TIME", 30))
+            )
+            
+            if not search_responses:
+                print("❌ Nenhuma resposta")
+                continue
+            
+            total_files = sum(len(response.get("files", [])) for response in search_responses)
+            print(f"📊 Total de arquivos encontrados: {total_files}")
+            
+            if total_files > 0:
+                best_file, best_user, best_score = find_best_audiobook(search_responses, query)
+                
+                min_score = int(os.getenv("MIN_AUDIOBOOK_SCORE", 20))
+                
+                if best_file and best_score > min_score:
+                    print(f"\n📚 Melhor audiobook (score: {best_score:.1f}):")
+                    print(f"   👤 Usuário: {best_user}")
+                    print(f"   📄 Arquivo: {best_file.get('filename')}")
+                    print(f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB")
+                    
+                    # Download com diretório personalizado
+                    success = download_audiobook(
+                        slskd, best_user, best_file.get('filename'), 
+                        best_file.get('size', 0), query, custom_dir
+                    )
+                    
+                    if success:
+                        print(f"✅ Sucesso com '{search_term}'!")
+                        return True
+                    else:
+                        print(f"❌ Falha no download - continuando...")
+                else:
+                    print(f"❌ Nenhum audiobook adequado (score: {best_score:.1f}) - continuando...")
+        
+        except Exception as e:
+            print(f"❌ Erro na busca: {e}")
+        
+        if i < len(variations):
+            print("⏸️ Pausa entre buscas...")
+            time.sleep(3)
+    
+    return False
+
 def smart_mp3_search_force(slskd, query):
     """Busca inteligente por MP3 ignorando histórico (para comando --force)"""
     print(f"🎯 Busca inteligente por MP3 (FORÇADA): '{query}'")
@@ -2074,6 +2399,10 @@ def main():
     print("💿 Busca por álbum:")
     print('   --album "Artista - Álbum" : Busca álbum completo')
     print('   "Artista - Nome Album"     : Detecção automática de álbum')
+    print("📚 Busca por audiobook:")
+    print('   --audiobook "Autor - Título" : Busca audiobook')
+    print('   --audiobook "Stephen King IT" --dir ./audiobooks : Salva em diretório específico')
+    print('   --audiobook-list "busca" : Lista opções para seleção no Telegram')
     print("🎵 Comandos Spotify:")
     print("   --playlist URL     : Converte playlist para TXT e agenda processamento")
     print("   --preview URL      : Mostra preview da playlist (sem baixar)")
@@ -2173,6 +2502,96 @@ def main():
                     )
             else:
                 print(f"\n❌ Nenhum álbum adequado encontrado")
+            return
+        
+        # Comando para listar opções de audiobook
+        elif first_arg == "--audiobook-list" and len(sys.argv) > 2:
+            audiobook_query = " ".join(sys.argv[2:])
+            print(f"📚 Listando opções de audiobook: '{audiobook_query}'")
+
+            slskd = connectToSlskd()
+            if not slskd:
+                return
+
+            options = list_audiobook_options(slskd, audiobook_query, limit=10)
+            
+            if options:
+                print(f"\n📚 {len(options)} audiobooks encontrados:")
+                print("=" * 60)
+                
+                for i, option in enumerate(options, 1):
+                    filename = os.path.basename(option['filename'])
+                    size_mb = option['size'] / 1024 / 1024
+                    score = option['score']
+                    username = option['username']
+                    
+                    # Detecta formato
+                    ext = os.path.splitext(filename)[1].lower()
+                    format_emoji = {
+                        '.m4b': '📚',
+                        '.m4a': '🎧', 
+                        '.mp3': '🎵',
+                        '.aac': '🔊',
+                        '.flac': '🎼'
+                    }.get(ext, '📄')
+                    
+                    print(f"{i:2d}. {format_emoji} {filename}")
+                    print(f"     👤 {username} | 💾 {size_mb:.1f}MB | ⭐ {score:.0f}")
+                    print()
+                
+                print("💡 Para usar no Telegram: /audiobook_select <número>")
+                
+                # Salva opções em arquivo temporário para o Telegram
+                import json
+                temp_file = "/app/data/audiobook_options.json" if os.path.exists("/app/data") else "audiobook_options.json"
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'query': audiobook_query,
+                        'options': options
+                    }, f, indent=2, ensure_ascii=False)
+                print(f"💾 Opções salvas para seleção no Telegram")
+            else:
+                print(f"\n❌ Nenhum audiobook encontrado para '{audiobook_query}'")
+            return
+        
+        # Comando para busca de audiobook
+        elif first_arg == "--audiobook" and len(sys.argv) > 2:
+            # Processa argumentos do audiobook
+            audiobook_args = sys.argv[2:]
+            custom_dir = None
+            audiobook_query = ""
+            
+            # Procura por --dir
+            if "--dir" in audiobook_args:
+                dir_index = audiobook_args.index("--dir")
+                if dir_index + 1 < len(audiobook_args):
+                    custom_dir = audiobook_args[dir_index + 1]
+                    # Remove --dir e o diretório dos argumentos
+                    audiobook_args = audiobook_args[:dir_index] + audiobook_args[dir_index + 2:]
+            
+            audiobook_query = " ".join(audiobook_args)
+            
+            if not audiobook_query:
+                print("❌ Nenhuma busca de audiobook fornecida")
+                return
+            
+            print(f"📚 Buscando audiobook: '{audiobook_query}'")
+            if custom_dir:
+                print(f"📁 Diretório personalizado: {custom_dir}")
+
+            slskd = connectToSlskd()
+            if not slskd:
+                return
+
+            success = smart_audiobook_search(slskd, audiobook_query, custom_dir)
+
+            if success:
+                show_downloads(slskd)
+                print(f"\n✅ Busca de audiobook concluída com sucesso!")
+                if custom_dir:
+                    print(f"📝 Lembre-se de mover o arquivo para {custom_dir} após o download")
+            else:
+                print(f"\n❌ Nenhum audiobook adequado encontrado")
             return
 
         # Comando para preview de playlist

@@ -83,6 +83,19 @@ class PlaylistProcessor:
             )
         ''')
         
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS failed_downloads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                track_hash TEXT UNIQUE,
+                artist TEXT,
+                album TEXT,
+                title TEXT,
+                original_line TEXT,
+                failed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                retry_count INTEGER DEFAULT 0
+            )
+        ''')
+        
         conn.commit()
         conn.close()
     
@@ -125,6 +138,28 @@ class PlaylistProcessor:
         conn.commit()
         conn.close()
     
+    def mark_as_failed(self, line):
+        """Marca música como falhada no banco"""
+        track_hash = self.get_track_hash(line)
+        parts = line.split(' - ')
+        
+        artist = parts[0].strip() if len(parts) > 0 else ""
+        album = parts[1].strip() if len(parts) > 1 else ""
+        title = parts[2].strip() if len(parts) > 2 else ""
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO failed_downloads 
+            (track_hash, artist, album, title, original_line, retry_count)
+            VALUES (?, ?, ?, ?, ?, 
+                COALESCE((SELECT retry_count FROM failed_downloads WHERE track_hash = ?), 0) + 1)
+        ''', (track_hash, artist, album, title, line, track_hash))
+        
+        conn.commit()
+        conn.close()
+    
     def connect_slskd(self):
         """Conecta ao slskd"""
         try:
@@ -147,12 +182,11 @@ class PlaylistProcessor:
             return None
     
     def download_track(self, slskd, line):
-        """Baixa uma música forçando busca individual (nunca álbum)"""
+        """Baixa uma música e aguarda confirmação de sucesso"""
         try:
             from cli.main import create_search_variations, wait_for_search_completion, find_best_mp3, smart_download_with_fallback
             import os
             
-            # Força busca individual criando variações apenas para faixas
             variations = create_search_variations(line)
             
             for search_term in variations:
@@ -167,7 +201,6 @@ class PlaylistProcessor:
                     if not search_responses:
                         continue
                     
-                    # Busca apenas arquivos individuais, nunca álbuns
                     best_file, best_user, best_score = find_best_mp3(search_responses, line)
                     
                     if best_file and best_score > 15:
@@ -175,7 +208,9 @@ class PlaylistProcessor:
                             slskd, search_responses, best_file, best_user, line
                         )
                         if success:
-                            return True
+                            # Aguarda confirmação de download
+                            if self.wait_for_download_completion(slskd, best_file.get('filename'), best_user):
+                                return True
                             
                 except Exception:
                     continue
@@ -203,14 +238,50 @@ class PlaylistProcessor:
             print(f"❌ Erro ao remover linha: {e}")
             return False
     
+    def wait_for_download_completion(self, slskd, filename, username, max_wait=300):
+        """Aguarda confirmação de download completado"""
+        print(f"⏳ Aguardando confirmação de download...")
+        
+        start_time = time.time()
+        check_interval = 10
+        
+        while time.time() - start_time < max_wait:
+            try:
+                downloads = slskd.transfers.get_all_downloads()
+                
+                for download in downloads:
+                    dl_filename = download.get('filename', '')
+                    dl_username = download.get('username', '')
+                    dl_state = download.get('state', '').lower()
+                    
+                    # Verifica se é o arquivo que estamos aguardando
+                    if (os.path.basename(dl_filename) == os.path.basename(filename) and 
+                        dl_username == username):
+                        
+                        if dl_state in ['completed', 'complete', 'finished']:
+                            print(f"✅ Download confirmado: {os.path.basename(filename)}")
+                            return True
+                        elif dl_state in ['failed', 'error', 'cancelled']:
+                            print(f"❌ Download falhou: {dl_state}")
+                            return False
+                        else:
+                            print(f"📥 Status: {dl_state} - aguardando...")
+                
+                time.sleep(check_interval)
+                
+            except Exception as e:
+                print(f"⚠️ Erro ao verificar downloads: {e}")
+                time.sleep(check_interval)
+        
+        print(f"⏰ Timeout - assumindo falha no download")
+        return False
+    
     def add_to_failed_file(self, original_file, line):
         """Adiciona música ao arquivo de falhas"""
         try:
-            # Gera nome do arquivo de falhas baseado no original
             base_name = os.path.splitext(original_file)[0]
             failed_file = f"{base_name}_failed.txt"
             
-            # Adiciona linha ao arquivo de falhas
             with open(failed_file, 'a', encoding='utf-8') as f:
                 f.write(f"{line}\n")
             
@@ -258,21 +329,22 @@ class PlaylistProcessor:
             
             print(f"🎵 [{processed}] Baixando: {line}")
             
-            # Tenta baixar
+            # Tenta baixar e aguarda confirmação
             success = self.download_track(slskd, line)
             
             if success:
-                print(f"✅ Sucesso: {line}")
+                print(f"✅ Sucesso confirmado: {line}")
                 self.mark_downloaded(line)
                 self.remove_line_from_file(file_path, line)
                 downloaded += 1
             else:
-                print(f"❌ Falha: {line}")
+                print(f"❌ Falha confirmada: {line}")
+                self.mark_as_failed(line)
                 self.add_to_failed_file(file_path, line)
                 self.remove_line_from_file(file_path, line)
             
             # Pausa entre downloads
-            time.sleep(3)
+            time.sleep(30)
         
         print(f"📊 {file_path}: {downloaded} baixadas, {skipped} puladas, {processed} processadas")
     
@@ -310,6 +382,76 @@ class PlaylistProcessor:
             file_path = os.path.join(playlists_dir, txt_file)
             self.process_playlist_file(file_path)
             time.sleep(5)  # Pausa entre arquivos
+    
+    def get_failed_tracks(self, max_retries=3):
+        """Obtém músicas falhadas para retry"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT original_line FROM failed_downloads 
+            WHERE retry_count < ? 
+            ORDER BY failed_at ASC
+        """, (max_retries,))
+        
+        tracks = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        return tracks
+    
+    def remove_from_failed(self, line):
+        """Remove música da lista de falhas após sucesso"""
+        track_hash = self.get_track_hash(line)
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM failed_downloads WHERE track_hash = ?", (track_hash,))
+        
+        conn.commit()
+        conn.close()
+    
+    def retry_failed_downloads(self):
+        """Tenta novamente downloads que falharam"""
+        print("🔄 Iniciando retry de downloads falhados")
+        
+        failed_tracks = self.get_failed_tracks()
+        if not failed_tracks:
+            print("✅ Nenhuma música falhada para retry")
+            return
+        
+        print(f"📋 {len(failed_tracks)} músicas para retry")
+        
+        slskd = self.connect_slskd()
+        if not slskd:
+            return
+        
+        successful = 0
+        failed = 0
+        
+        for i, line in enumerate(failed_tracks, 1):
+            print(f"\n🔄 [{i}/{len(failed_tracks)}] Retry: {line}")
+            
+            if self.is_downloaded(line):
+                print(f"✅ Já baixada - removendo da lista de falhas")
+                self.remove_from_failed(line)
+                successful += 1
+                continue
+            
+            success = self.download_track(slskd, line)
+            
+            if success:
+                print(f"✅ Retry bem-sucedido: {line}")
+                self.mark_downloaded(line)
+                self.remove_from_failed(line)
+                successful += 1
+            else:
+                print(f"❌ Retry falhou: {line}")
+                self.mark_as_failed(line)
+                failed += 1
+            
+            time.sleep(30)
+        
+        print(f"\n📊 Retry concluído: {successful} sucessos, {failed} falhas")
     
     def run_daemon(self):
         """Executa em modo daemon"""
@@ -356,6 +498,15 @@ def main():
             return
         try:
             processor.process_playlists_folder(include_failed=True)
+        finally:
+            processor.lock.release()
+    elif len(sys.argv) > 1 and sys.argv[1] == "--retry":
+        if not processor.lock.acquire():
+            print("❌ Outra instância já está rodando")
+            print("💡 Use --cleanup para remover lock órfão")
+            return
+        try:
+            processor.retry_failed_downloads()
         finally:
             processor.lock.release()
     else:
