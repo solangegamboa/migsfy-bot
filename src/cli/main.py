@@ -1590,8 +1590,8 @@ def smart_mp3_search(slskd, query):
 
     for i, search_term in enumerate(variations, 1):
         print(f"\n📍 Tentativa {i}/{len(variations)}: '{search_term}'")
+        search_id = None
 
-        # Executa a busca e verifica quantos arquivos encontrou
         try:
             print(f"🔍 Buscando: '{search_term}'")
 
@@ -1605,6 +1605,7 @@ def smart_mp3_search(slskd, query):
 
             if not search_responses:
                 print("❌ Nenhuma resposta")
+                cleanup_search(slskd, search_id)
                 continue
 
             # Conta total de arquivos encontrados
@@ -1616,73 +1617,36 @@ def smart_mp3_search(slskd, query):
 
             # Score mínimo configurável
             min_score = int(os.getenv("MIN_MP3_SCORE", 15))
+            best_file, best_user, best_score = find_best_mp3(search_responses, query)
 
-            # Se encontrou mais de 50 arquivos, processa e para
-            if total_files > 50:
-                print(
-                    f"🎯 Encontrados {total_files} arquivos (>50) - processando resultados..."
+            if best_file and best_score > min_score:
+                print(f"\n🎵 Melhor MP3 (score: {best_score:.1f}):")
+                print(f"   👤 Usuário: {best_user}")
+                print(f"   📄 Arquivo: {best_file.get('filename')}")
+                print(f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB")
+                print(f"   🎧 Bitrate: {best_file.get('bitRate', 0)} kbps")
+
+                # Usa download inteligente com fallback
+                success = smart_download_with_fallback(
+                    slskd, search_responses, best_file, best_user, query
                 )
-
-                best_file, best_user, best_score = find_best_mp3(
-                    search_responses, query
-                )
-
-                if best_file and best_score > min_score:
-                    print(f"\n🎵 Melhor MP3 (score: {best_score:.1f}):")
-                    print(f"   👤 Usuário: {best_user}")
-                    print(f"   📄 Arquivo: {best_file.get('filename')}")
-                    print(
-                        f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB"
-                    )
-                    print(f"   🎧 Bitrate: {best_file.get('bitRate', 0)} kbps")
-
-                    # Usa download inteligente com fallback
-                    success = smart_download_with_fallback(
-                        slskd, search_responses, best_file, best_user, query
-                    )
-                    if success:
-                        print(
-                            f"✅ Sucesso com '{search_term}' ({total_files} arquivos)!"
-                        )
-                        return True
-                    else:
-                        print(f"❌ Falha no download após tentar todas as alternativas")
-                        return False
+                
+                # Limpa busca atual
+                cleanup_search(slskd, search_id)
+                
+                if success:
+                    print(f"✅ Sucesso com '{search_term}' - cancelando buscas restantes!")
+                    return True
                 else:
-                    print(f"❌ Nenhum MP3 adequado (melhor score: {best_score:.1f})")
-                    return False
-
-            # Se encontrou poucos arquivos, continua com próxima variação
+                    print(f"❌ Falha no download - continuando...")
             else:
-                best_file, best_user, best_score = find_best_mp3(
-                    search_responses, query
-                )
-
-                if best_file and best_score > min_score:
-                    print(f"\n🎵 Melhor MP3 (score: {best_score:.1f}):")
-                    print(f"   👤 Usuário: {best_user}")
-                    print(f"   📄 Arquivo: {best_file.get('filename')}")
-                    print(
-                        f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB"
-                    )
-                    print(f"   🎧 Bitrate: {best_file.get('bitRate', 0)} kbps")
-
-                    # Usa download inteligente com fallback
-                    success = smart_download_with_fallback(
-                        slskd, search_responses, best_file, best_user, query
-                    )
-                    if success:
-                        print(f"✅ Sucesso com '{search_term}'!")
-                        return True
-                    else:
-                        print(f"❌ Falha no download - continuando...")
-                else:
-                    print(
-                        f"❌ Nenhum MP3 adequado (score: {best_score:.1f}) - continuando..."
-                    )
+                print(f"❌ Nenhum MP3 adequado (score: {best_score:.1f}) - continuando...")
+                cleanup_search(slskd, search_id)
 
         except Exception as e:
             print(f"❌ Erro na busca: {e}")
+            if search_id:
+                cleanup_search(slskd, search_id)
 
         # Pausa maior entre buscas para evitar sobrecarga
         if i < len(variations):
@@ -1708,10 +1672,9 @@ def smart_album_search(slskd, query):
     variations = create_album_search_variations(query)
     print(f"📝 {len(variations)} variações criadas para álbum")
 
-    best_results = []
-
     for i, search_term in enumerate(variations, 1):
         print(f"\n📍 Tentativa {i}/{len(variations)}: '{search_term}'")
+        search_id = None
 
         try:
             print(f"🔍 Buscando álbum: '{search_term}'")
@@ -1726,6 +1689,7 @@ def smart_album_search(slskd, query):
 
             if not search_responses:
                 print("❌ Nenhuma resposta")
+                cleanup_search(slskd, search_id)
                 continue
 
             # Conta total de arquivos encontrados
@@ -1762,8 +1726,13 @@ def smart_album_search(slskd, query):
                     )
                     confirm = input("Digite 'sim' para continuar: ").lower().strip()
 
+                    cleanup_search(slskd, search_id)
+
                     if confirm in ["sim", "s", "yes", "y"]:
-                        return download_album_tracks(slskd, best_album, query)
+                        success = download_album_tracks(slskd, best_album, query)
+                        if success:
+                            print(f"✅ Sucesso com álbum '{search_term}' - cancelando buscas restantes!")
+                            return True
                     else:
                         print("❌ Download cancelado pelo usuário")
                         return False
@@ -1783,12 +1752,19 @@ def smart_album_search(slskd, query):
                     success = smart_download_with_fallback(
                         slskd, search_responses, best_file, best_user, query
                     )
+                    
+                    cleanup_search(slskd, search_id)
+                    
                     if success:
-                        print(f"✅ Sucesso com '{search_term}'!")
+                        print(f"✅ Sucesso com '{search_term}' - cancelando buscas restantes!")
                         return True
+            else:
+                cleanup_search(slskd, search_id)
 
         except Exception as e:
             print(f"❌ Erro na busca: {e}")
+            if search_id:
+                cleanup_search(slskd, search_id)
 
         # Pausa entre buscas
         if i < len(variations):
@@ -2020,6 +1996,7 @@ def smart_audiobook_search(slskd, query, custom_dir=None):
     
     for i, search_term in enumerate(variations, 1):
         print(f"\n📍 Tentativa {i}/{len(variations)}: '{search_term}'")
+        search_id = None
         
         try:
             print(f"🔍 Buscando audiobook: '{search_term}'")
@@ -2033,6 +2010,7 @@ def smart_audiobook_search(slskd, query, custom_dir=None):
             
             if not search_responses:
                 print("❌ Nenhuma resposta")
+                cleanup_search(slskd, search_id)
                 continue
             
             total_files = sum(len(response.get("files", [])) for response in search_responses)
@@ -2055,16 +2033,23 @@ def smart_audiobook_search(slskd, query, custom_dir=None):
                         best_file.get('size', 0), query, custom_dir
                     )
                     
+                    cleanup_search(slskd, search_id)
+                    
                     if success:
-                        print(f"✅ Sucesso com '{search_term}'!")
+                        print(f"✅ Sucesso com '{search_term}' - cancelando buscas restantes!")
                         return True
                     else:
                         print(f"❌ Falha no download - continuando...")
                 else:
                     print(f"❌ Nenhum audiobook adequado (score: {best_score:.1f}) - continuando...")
+                    cleanup_search(slskd, search_id)
+            else:
+                cleanup_search(slskd, search_id)
         
         except Exception as e:
             print(f"❌ Erro na busca: {e}")
+            if search_id:
+                cleanup_search(slskd, search_id)
         
         if i < len(variations):
             print("⏸️ Pausa entre buscas...")
@@ -2135,6 +2120,7 @@ def smart_mp3_search_force(slskd, query):
                     success = smart_download_with_fallback(
                         slskd, search_responses, best_file, best_user, query
                     )
+                    cleanup_search(slskd, search_id)
                     if success:
                         print(
                             f"✅ Sucesso com '{search_term}' ({total_files} arquivos)!"
@@ -2178,6 +2164,10 @@ def smart_mp3_search_force(slskd, query):
 
         except Exception as e:
             print(f"❌ Erro na busca: {e}")
+            try:
+                cleanup_search(slskd, search_id)
+            except:
+                pass
 
         # Pausa maior entre buscas para evitar sobrecarga
         if i < len(variations):
