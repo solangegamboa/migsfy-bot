@@ -77,7 +77,16 @@ echo "✅ Cron iniciado - playlist processor a cada hora"
 if [ -f "/app/.env" ] && grep -q "TELEGRAM_BOT_TOKEN" /app/.env; then
     echo "🤖 Iniciando bot do Telegram em background..."
     cd /app
-    nohup python3 -m src.telegram.bot > /app/logs/telegram-bot.log 2>&1 &
+    
+    # Verifica se deve usar o bot simples do Spotify
+    if [ "$USE_SIMPLE_SPOTIFY_BOT" = "true" ]; then
+        echo "🎵 Usando bot simples do Spotify..."
+        nohup python3 -m src.telegram.spotify_bot > /app/logs/telegram-bot.log 2>&1 &
+    else
+        echo "🎵 Usando bot completo..."
+        nohup python3 -m src.telegram.bot > /app/logs/telegram-bot.log 2>&1 &
+    fi
+    
     BOT_PID=$!
     echo "✅ Bot do Telegram iniciado (PID: $BOT_PID)"
     
