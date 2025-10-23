@@ -275,39 +275,28 @@ class PlaylistProcessor:
 
             for download in downloads:
                 dl_username = download.get('username', '')
+                directories = download.get('directories', [])
                 
-                # Verifica estrutura: pode ser lista de arquivos diretos ou com diretórios
-                files_to_check = []
-                
-                if 'directories' in download:
-                    # Estrutura com diretórios
-                    for directory in download.get('directories', []):
-                        files_to_check.extend(directory.get('files', []))
-                elif 'files' in download:
-                    # Estrutura direta com arquivos
-                    files_to_check = download.get('files', [])
-                else:
-                    # Pode ser um único arquivo
-                    if 'filename' in download:
-                        files_to_check = [download]
-                
-                for file_info in files_to_check:
-                    dl_filename = file_info.get('filename', '')
-                    dl_state = file_info.get('state', '').lower()
+                for directory in directories:
+                    files = directory.get('files', [])
                     
-                    # Extrai apenas o nome do arquivo (última parte do path)
-                    filename_only = os.path.basename(dl_filename)
-                    
-                    # Busca por similaridade no nome do arquivo apenas
-                    if any(word.lower() in filename_only.lower() for word in line.split() if len(word) > 3):
-                        print(f"📥 Já na fila: {filename_only} - Status: {dl_state}")
+                    for file_info in files:
+                        dl_filename = file_info.get('filename', '')
+                        dl_state = file_info.get('state', '').lower()
                         
-                        if dl_state in ['completed', 'complete', 'finished'] or 'completed, succeeded' in dl_state:
-                            print(f"✅ Já completado na fila")
-                            return True
-                        elif dl_state in ['downloading', 'inprogress', 'queued', 'queued, remotely', 'pending']:
-                            print(f"⏳ Já em download - aguardando...")
-                            return self.wait_for_download_completion(slskd, dl_filename, dl_username)
+                        # Extrai apenas o nome do arquivo
+                        filename_only = os.path.basename(dl_filename)
+                        
+                        # Busca por similaridade no nome do arquivo
+                        if any(word.lower() in filename_only.lower() for word in line.split() if len(word) > 3):
+                            print(f"📥 Já na fila: {filename_only} - Status: {dl_state}")
+                            
+                            if dl_state in ['completed', 'complete', 'finished', 'completed, succeeded']:
+                                print(f"✅ Já completado na fila")
+                                return True
+                            elif dl_state in ['downloading', 'inprogress', 'queued', 'queued, remotely', 'pending']:
+                                print(f"⏳ Já em download - aguardando...")
+                                return self.wait_for_download_completion(slskd, dl_filename, dl_username)
 
             return False
 
@@ -315,15 +304,50 @@ class PlaylistProcessor:
             print(f"⚠️ Erro ao verificar fila: {e}")
             return False
 
+    def find_download_in_queue(self, slskd, filename, username):
+        """Procura download específico na fila por usuário e arquivo"""
+        try:
+            downloads = slskd.transfers.get_all_downloads()
+            target_filename = os.path.basename(filename) if filename else ''
+            
+            for download in downloads:
+                dl_username = download.get('username', '')
+                
+                if dl_username != username:
+                    continue
+                    
+                directories = download.get('directories', [])
+                
+                for directory in directories:
+                    files = directory.get('files', [])
+                    
+                    for file_info in files:
+                        dl_filename = file_info.get('filename', '')
+                        dl_state = file_info.get('state', '').lower()
+                        
+                        filename_only = os.path.basename(dl_filename)
+                        
+                        # Match por similaridade no nome
+                        if (target_filename.lower() in filename_only.lower() or 
+                            filename_only.lower() in target_filename.lower()):
+                            return file_info, dl_state
+
+            return None, None
+
+        except Exception as e:
+            print(f"⚠️ Erro ao procurar na fila: {e}")
+            return None, None
+
     def download_track(self, slskd, line):
         """Baixa uma música e aguarda confirmação de sucesso"""
         try:
-            # Verifica se já está na fila
+            # SEMPRE verifica se já está na fila ANTES de fazer qualquer busca
+            print(f"🔍 Verificando se '{line}' já está na fila...")
             if self.check_existing_download(slskd, line):
+                print(f"⏭️ Pulando - já está na fila ou completado")
                 return True
 
             import os
-
             from cli.main import (
                 create_search_variations,
                 find_best_mp3,
@@ -331,6 +355,7 @@ class PlaylistProcessor:
                 wait_for_search_completion,
             )
 
+            print(f"🎵 Iniciando busca para: {line}")
             variations = create_search_variations(line)
 
             for search_term in variations:
@@ -355,6 +380,20 @@ class PlaylistProcessor:
                         success = smart_download_with_fallback(
                             slskd, search_responses, best_file, best_user, line
                         )
+                        if success:
+                            # Aguarda confirmação de download
+                            return self.wait_for_download_completion(
+                                slskd, best_file.get("filename"), best_user
+                            )
+
+                except Exception:
+                    continue
+
+            return False
+
+        except Exception as e:
+            print(f"❌ Erro no download: {e}")
+            return False
                         if success:
                             # Aguarda confirmação de download
                             if self.wait_for_download_completion(
@@ -390,7 +429,28 @@ class PlaylistProcessor:
             print(f"❌ Erro ao remover linha: {e}")
             return False
 
-    def find_download_in_queue(self, slskd, filename, username):
+    def get_all_files_from_downloads(self, downloads):
+        """Extrai todos os arquivos da estrutura de downloads"""
+        all_files = []
+        
+        for download in downloads:
+            dl_username = download.get('username', '')
+            directories = download.get('directories', [])
+            
+            for directory in directories:
+                files = directory.get('files', [])
+                
+                for file_info in files:
+                    file_data = {
+                        'username': dl_username,
+                        'filename': file_info.get('filename', ''),
+                        'state': file_info.get('state', '').lower(),
+                        'size': file_info.get('size', 0),
+                        'file_info': file_info
+                    }
+                    all_files.append(file_data)
+        
+        return all_files
         """Procura download específico na fila por usuário e arquivo"""
         try:
             downloads = slskd.transfers.get_all_downloads()
