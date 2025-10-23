@@ -63,15 +63,15 @@ else
     echo "ℹ️ Cron não configurado (LASTFM_AUTO_TAGS não encontrado no .env)"
 fi
 
-# Start cron service for retry failed downloads
-echo "⏰ Iniciando serviço cron para retry de downloads..."
-service cron start
-echo "✅ Cron iniciado - retry de falhas a cada 24h às 2h"
+# Start playlist processor immediately
+echo "🎵 Executando processador de playlists inicial..."
+cd /app && python3 src/playlist/main.py
+echo "✅ Processador de playlists executado"
 
-# Start playlist processor in background
-echo "🎵 Iniciando processador de playlists em background..."
-nohup python3 src/playlist_processor.py --daemon > /app/logs/playlist_processor.log 2>&1 &
-echo "✅ Processador de playlists iniciado (PID: $!)"
+# Start cron service for scheduled runs
+echo "⏰ Iniciando serviço cron para execuções agendadas..."
+service cron start
+echo "✅ Cron iniciado - playlist processor a cada hora"
 
 # Check if .env file exists
 if [ ! -f "/app/.env" ]; then
