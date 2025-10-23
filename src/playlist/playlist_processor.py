@@ -113,9 +113,9 @@ class PlaylistProcessor:
         # Extrair artista e música
         artist, song = self.duplicate_detector.extract_artist_song(file_line)
 
-        # Verificar se já foi baixado com SUCESSO (só remove linha se sucesso)
+        # Verificar se já foi baixado com SUCESSO (remove linha)
         if self.db_manager.is_downloaded(file_line):
-            print(f"✅ Já baixado com sucesso: {file_line}")
+            print(f"✅ Duplicata confirmada - removendo linha: {file_line}")
             self.stats["duplicates_found"] += 1
             return True  # Remove linha (já baixado com sucesso)
 
