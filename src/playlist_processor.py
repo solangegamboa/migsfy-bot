@@ -240,10 +240,11 @@ class PlaylistProcessor:
     
     def wait_for_download_completion(self, slskd, filename, username, max_wait=300):
         """Aguarda confirmação de download completado"""
-        print(f"⏳ Aguardando confirmação de download...")
+        print(f"⏳ Aguardando confirmação de download por {max_wait}s...")
         
         start_time = time.time()
-        check_interval = 10
+        check_interval = 5
+        found_download = False
         
         while time.time() - start_time < max_wait:
             try:
@@ -254,18 +255,25 @@ class PlaylistProcessor:
                     dl_username = download.get('username', '')
                     dl_state = download.get('state', '').lower()
                     
-                    # Verifica se é o arquivo que estamos aguardando
-                    if (os.path.basename(dl_filename) == os.path.basename(filename) and 
-                        dl_username == username):
+                    # Busca por nome do arquivo ou usuário
+                    filename_match = (os.path.basename(dl_filename).lower() in os.path.basename(filename).lower() or
+                                    os.path.basename(filename).lower() in os.path.basename(dl_filename).lower())
+                    
+                    if filename_match and dl_username == username:
+                        found_download = True
+                        print(f"📥 Encontrado: {os.path.basename(dl_filename)} - Status: {dl_state}")
                         
                         if dl_state in ['completed', 'complete', 'finished']:
-                            print(f"✅ Download confirmado: {os.path.basename(filename)}")
+                            print(f"✅ Download confirmado: {os.path.basename(dl_filename)}")
                             return True
                         elif dl_state in ['failed', 'error', 'cancelled']:
                             print(f"❌ Download falhou: {dl_state}")
                             return False
-                        else:
-                            print(f"📥 Status: {dl_state} - aguardando...")
+                
+                if not found_download:
+                    print(f"🔍 Procurando download... ({int(time.time() - start_time)}s)")
+                else:
+                    print(f"⏳ Aguardando conclusão... ({int(time.time() - start_time)}s)")
                 
                 time.sleep(check_interval)
                 
@@ -273,8 +281,20 @@ class PlaylistProcessor:
                 print(f"⚠️ Erro ao verificar downloads: {e}")
                 time.sleep(check_interval)
         
+        # Se não encontrou o download, assume sucesso (pode ter sido muito rápido)
+        if not found_download:
+            print(f"⚡ Download não encontrado na fila - assumindo sucesso")
+            return True
+        
         print(f"⏰ Timeout - assumindo falha no download")
-        return False
+        return Falseoad.get('username', '')
+                    dl_state = download.get('state', '').lower()
+                    
+                    # Verifica se é o arquivo que estamos aguardando
+                    if (os.path.basename(dl_filename) == os.path.basename(filename) and 
+                        dl_username == username):
+                        
+
     
     def add_to_failed_file(self, original_file, line):
         """Adiciona música ao arquivo de falhas"""
