@@ -275,28 +275,39 @@ class PlaylistProcessor:
 
             for download in downloads:
                 dl_username = download.get('username', '')
-                directories = download.get('directories', [])
                 
-                for directory in directories:
-                    files = directory.get('files', [])
+                # Verifica estrutura: pode ser lista de arquivos diretos ou com diretórios
+                files_to_check = []
+                
+                if 'directories' in download:
+                    # Estrutura com diretórios
+                    for directory in download.get('directories', []):
+                        files_to_check.extend(directory.get('files', []))
+                elif 'files' in download:
+                    # Estrutura direta com arquivos
+                    files_to_check = download.get('files', [])
+                else:
+                    # Pode ser um único arquivo
+                    if 'filename' in download:
+                        files_to_check = [download]
+                
+                for file_info in files_to_check:
+                    dl_filename = file_info.get('filename', '')
+                    dl_state = file_info.get('state', '').lower()
                     
-                    for file_info in files:
-                        dl_filename = file_info.get('filename', '')
-                        dl_state = file_info.get('state', '').lower()
+                    # Extrai apenas o nome do arquivo (última parte do path)
+                    filename_only = os.path.basename(dl_filename)
+                    
+                    # Busca por similaridade no nome do arquivo apenas
+                    if any(word.lower() in filename_only.lower() for word in line.split() if len(word) > 3):
+                        print(f"📥 Já na fila: {filename_only} - Status: {dl_state}")
                         
-                        # Extrai apenas o nome do arquivo (última parte do path)
-                        filename_only = dl_filename.split('\\')[-1] if dl_filename else ''
-                        
-                        # Busca por similaridade no nome do arquivo apenas
-                        if any(word.lower() in filename_only.lower() for word in line.split() if len(word) > 3):
-                            print(f"📥 Já na fila: {filename_only} - Status: {dl_state}")
-                            
-                            if dl_state in ['completed', 'complete', 'finished'] or 'completed, succeeded' in dl_state:
-                                print(f"✅ Já completado na fila")
-                                return True
-                            elif dl_state in ['downloading', 'inprogress', 'queued', 'queued, remotely', 'pending']:
-                                print(f"⏳ Já em download - aguardando...")
-                                return self.wait_for_download_completion(slskd, dl_filename, dl_username)
+                        if dl_state in ['completed', 'complete', 'finished'] or 'completed, succeeded' in dl_state:
+                            print(f"✅ Já completado na fila")
+                            return True
+                        elif dl_state in ['downloading', 'inprogress', 'queued', 'queued, remotely', 'pending']:
+                            print(f"⏳ Já em download - aguardando...")
+                            return self.wait_for_download_completion(slskd, dl_filename, dl_username)
 
             return False
 
@@ -383,34 +394,50 @@ class PlaylistProcessor:
         """Procura download específico na fila por usuário e arquivo"""
         try:
             downloads = slskd.transfers.get_all_downloads()
-
+            
+            # Extrai apenas o nome do arquivo para comparação
+            target_filename = os.path.basename(filename) if filename else ''
+            
             for download in downloads:
                 dl_username = download.get('username', '')
-                directories = download.get('directories', [])
                 
-                for directory in directories:
-                    files = directory.get('files', [])
+                # Verifica se é do mesmo usuário
+                if dl_username != username:
+                    continue
+                
+                # Verifica estrutura: pode ser lista de arquivos diretos ou com diretórios
+                files_to_check = []
+                
+                if 'directories' in download:
+                    # Estrutura com diretórios
+                    for directory in download.get('directories', []):
+                        files_to_check.extend(directory.get('files', []))
+                elif 'files' in download:
+                    # Estrutura direta com arquivos
+                    files_to_check = download.get('files', [])
+                else:
+                    # Pode ser um único arquivo
+                    if 'filename' in download:
+                        files_to_check = [download]
+                
+                for file_info in files_to_check:
+                    dl_filename = file_info.get('filename', '')
+                    dl_state = file_info.get('state', '').lower()
                     
-                    for file_info in files:
-                        dl_filename = file_info.get('filename', '')
-                        dl_state = file_info.get('state', '').lower()
-                        
-                        # Extrai apenas o nome do arquivo (última parte do path)
-                        dl_filename_only = dl_filename.split('\\')[-1] if dl_filename else ''
-                        filename_only = filename.split('\\')[-1] if filename else ''
-                        
-                        # Match apenas por nome do arquivo
-                        filename_match = (dl_filename_only.lower() == filename_only.lower() or
-                                        dl_filename_only.lower() in filename_only.lower() or
-                                        filename_only.lower() in dl_filename_only.lower())
-                        
-                        if filename_match:
-                            return file_info, dl_state
+                    # Extrai nome do arquivo
+                    dl_filename_only = os.path.basename(dl_filename)
+                    
+                    # Match por similaridade no nome
+                    if (target_filename.lower() in dl_filename_only.lower() or 
+                        dl_filename_only.lower() in target_filename.lower()):
+                        return file_info, dl_state
 
             return None, None
 
         except Exception as e:
             print(f"⚠️ Erro ao procurar na fila: {e}")
+            import traceback
+            print(f"🔍 Debug: {traceback.format_exc()}")
             return None, None
 
     def wait_for_download_completion(self, slskd, filename, username, max_wait=300):
@@ -418,7 +445,7 @@ class PlaylistProcessor:
         print(f"⏳ Aguardando confirmação: {os.path.basename(filename)} de {username}")
 
         start_time = time.time()
-        check_interval = 5
+        check_interval = 10
 
         while time.time() - start_time < max_wait:
             try:
