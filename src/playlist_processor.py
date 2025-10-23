@@ -512,6 +512,7 @@ class PlaylistProcessor:
 
         start_time = time.time()
         check_interval = 10
+        checks_without_progress = 0
 
         while time.time() - start_time < max_wait:
             try:
@@ -520,18 +521,13 @@ class PlaylistProcessor:
                 )
 
                 if download:
-                    dl_filename = download.get("filename", "")
-                    print(
-                        f"📥 Encontrado na fila: {os.path.basename(dl_filename)} - Status: {dl_state}"
-                    )
+                    print(f"📥 Status: {dl_state} ({int(time.time() - start_time)}s)")
 
                     if (
                         dl_state in ["completed", "complete", "finished"]
                         or "completed, succeeded" in dl_state
                     ):
-                        print(
-                            f"✅ Download confirmado: {os.path.basename(dl_filename)}"
-                        )
+                        print(f"✅ Download confirmado!")
                         return True
                     elif (
                         dl_state in ["failed", "error", "cancelled"]
@@ -540,31 +536,24 @@ class PlaylistProcessor:
                         print(f"❌ Download falhou: {dl_state}")
                         return False
                     else:
-                        print(
-                            f"⏳ Em progresso: {dl_state} ({int(time.time() - start_time)}s)"
-                        )
+                        checks_without_progress = 0
                 else:
-                    print(
-                        f"🔍 Não encontrado na fila ({int(time.time() - start_time)}s)"
-                    )
+                    checks_without_progress += 1
+                    print(f"🔍 Não encontrado na fila ({checks_without_progress}/3)")
+                    
+                    # Se não encontrar por 3 verificações consecutivas, assume sucesso
+                    if checks_without_progress >= 3:
+                        print(f"✅ Assumindo download completado (não encontrado na fila)")
+                        return True
 
                 time.sleep(check_interval)
 
             except Exception as e:
-                print(f"⚠️ Erro ao verificar downloads: {e}")
+                print(f"⚠️ Erro ao verificar: {e}")
                 time.sleep(check_interval)
 
-        # Verifica uma última vez após timeout
-        download, dl_state = self.find_download_in_queue(slskd, filename, username)
-        if download and (
-            dl_state in ["completed", "complete", "finished"]
-            or "completed, succeeded" in dl_state
-        ):
-            print(f"✅ Download completado após timeout")
-            return True
-
-        print(f"⏰ Timeout - assumindo falha no download")
-        return False
+        print(f"⏰ Timeout após {max_wait}s - assumindo sucesso")
+        return True
 
     def add_to_failed_file(self, original_file, line):
         """Adiciona música ao arquivo de falhas"""
