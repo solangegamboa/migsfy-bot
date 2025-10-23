@@ -94,9 +94,15 @@ class SlskdApiClient:
             return presence == 'online'
         return False
 
-    def _wait_for_search_completion(self, search_id: str, timeout: int = 30) -> List[Dict]:
+    def _wait_for_search_completion(self, search_id: str, timeout: int = None) -> List[Dict]:
         """Aguarda conclusão da busca e retorna os resultados"""
+        if timeout is None:
+            timeout = int(os.getenv('SEARCH_COMPLETION_TIMEOUT', 120))
+            
         start_time = time.time()
+        check_interval = 10  # Intervalo fixo de 10 segundos
+        
+        print(f"🔍 Aguardando conclusão da busca {search_id} (timeout: {timeout}s, intervalo: {check_interval}s)")
         
         while time.time() - start_time < timeout:
             try:
@@ -111,31 +117,46 @@ class SlskdApiClient:
                         break
                 
                 if not search_status:
-                    raise Exception(f"Busca {search_id} não encontrada")
+                    print(f"⚠️ Busca {search_id} não encontrada na lista")
+                    time.sleep(check_interval)
+                    continue
                 
+                state = search_status.get('state', 'Unknown')
                 file_count = search_status.get('fileCount', 0)
                 is_complete = search_status.get('isComplete', False)
+                elapsed = int(time.time() - start_time)
                 
-                print(f"🔍 Status: {search_status.get('state')} - Complete: {is_complete} - Files: {file_count}")
+                print(f"🔍 [{elapsed}s] Estado: {state} | Complete: {is_complete} | Arquivos: {file_count}")
                 
-                if is_complete:
+                # Aguardar especificamente por isComplete = True
+                if is_complete is True:
+                    print(f"✅ Busca marcada como completa após {elapsed}s")
+                    
                     if file_count > 0:
                         # Obter respostas usando o ID da busca
-                        responses = self.api.searches.search_responses(search_id)
-                        print(f"🔍 Busca concluída com {len(responses)} respostas e {file_count} arquivos")
-                        return responses
+                        try:
+                            responses = self.api.searches.search_responses(search_id)
+                            print(f"🔍 Busca concluída com {len(responses)} respostas e {file_count} arquivos")
+                            return responses
+                        except Exception as e:
+                            print(f"⚠️ Erro ao obter respostas da busca: {e}")
+                            # Continuar tentando por mais algumas iterações
+                            time.sleep(check_interval)
+                            continue
                     else:
                         print("🔍 Busca concluída mas sem resultados (fileCount = 0)")
                         return []
                 
                 # Aguardar antes da próxima verificação
-                time.sleep(1)
+                time.sleep(check_interval)
                 
             except Exception as e:
-                print(f"🔍 Erro ao verificar status da busca: {e}")
-                time.sleep(2)
+                elapsed = int(time.time() - start_time)
+                print(f"❌ [{elapsed}s] Erro ao verificar status da busca: {e}")
+                time.sleep(check_interval)
         
-        raise Exception(f"Timeout aguardando conclusão da busca {search_id}")
+        elapsed = int(time.time() - start_time)
+        raise Exception(f"Timeout ({elapsed}s) aguardando conclusão da busca {search_id}")
 
     def _process_search_results(self, raw_results) -> List[Dict]:
         """Processa resultados da API para formato padrão"""
