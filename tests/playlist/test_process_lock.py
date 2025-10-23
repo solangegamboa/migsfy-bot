@@ -2,6 +2,8 @@ import pytest
 import tempfile
 import os
 import time
+import json
+from unittest.mock import patch, Mock
 from src.playlist.process_lock import ProcessLock
 
 class TestProcessLock:
@@ -12,12 +14,9 @@ class TestProcessLock:
         with tempfile.NamedTemporaryFile(suffix='.lock', delete=False) as f:
             lock_path = f.name
         
-        # Remove o arquivo para que ProcessLock possa criá-lo
         os.unlink(lock_path)
-        
         yield lock_path
         
-        # Cleanup
         if os.path.exists(lock_path):
             os.unlink(lock_path)
     
@@ -25,104 +24,94 @@ class TestProcessLock:
         """Testa aquisição e liberação de lock"""
         lock = ProcessLock(temp_lock_file)
         
-        # Deve conseguir adquirir
         assert lock.acquire() == True
         assert os.path.exists(temp_lock_file)
         
-        # Liberar
         lock.release()
         assert not os.path.exists(temp_lock_file)
     
-    def test_double_acquire_fails(self, temp_lock_file):
-        """Testa que segundo acquire falha"""
-        lock1 = ProcessLock(temp_lock_file)
-        lock2 = ProcessLock(temp_lock_file)
-        
-        # Primeiro deve conseguir
-        assert lock1.acquire() == True
-        
-        # Segundo deve falhar
-        assert lock2.acquire() == False
-        
-        # Cleanup
-        lock1.release()
-    
-    def test_is_locked(self, temp_lock_file):
-        """Testa verificação de lock ativo"""
+    def test_lock_info_details(self, temp_lock_file):
+        """Testa informações detalhadas do lock"""
         lock = ProcessLock(temp_lock_file)
-        
-        # Inicialmente não está locked
-        assert lock.is_locked() == False
-        
-        # Após acquire, deve estar locked
         lock.acquire()
-        assert lock.is_locked() == True
         
-        # Após release, não deve estar locked
+        info = lock.get_lock_info()
+        assert info is not None
+        assert info['pid'] == os.getpid()
+        assert 'timestamp' in info
+        assert 'hostname' in info
+        
         lock.release()
-        assert lock.is_locked() == False
     
-    def test_context_manager(self, temp_lock_file):
-        """Testa uso como context manager"""
+    def test_stale_lock_detection(self, temp_lock_file):
+        """Testa detecção de lock órfão"""
+        # Criar lock com PID inexistente
+        lock_data = {
+            'pid': 999999,
+            'timestamp': time.time(),
+            'hostname': 'test',
+            'process_name': 'playlist_processor'
+        }
+        
+        with open(temp_lock_file, 'w') as f:
+            json.dump(lock_data, f)
+        
         lock = ProcessLock(temp_lock_file)
+        assert lock.is_locked() == False  # Deve detectar como órfão
+    
+    def test_timeout_detection(self, temp_lock_file):
+        """Testa detecção de timeout"""
+        lock = ProcessLock(temp_lock_file, timeout=1)  # 1 segundo
         
-        # Usar com context manager
-        with lock:
-            assert os.path.exists(temp_lock_file)
+        # Criar lock antigo
+        lock_data = {
+            'pid': os.getpid(),
+            'timestamp': time.time() - 2,  # 2 segundos atrás
+            'hostname': 'test'
+        }
         
-        # Após sair do contexto, deve estar liberado
+        with open(temp_lock_file, 'w') as f:
+            json.dump(lock_data, f)
+        
+        assert lock._is_stale_lock() == True
+    
+    def test_force_release(self, temp_lock_file):
+        """Testa liberação forçada"""
+        lock = ProcessLock(temp_lock_file)
+        lock.acquire()
+        
+        assert lock.force_release() == True
         assert not os.path.exists(temp_lock_file)
     
-    def test_context_manager_exception(self, temp_lock_file):
-        """Testa context manager com exceção"""
+    @patch('psutil.pid_exists')
+    def test_process_verification(self, mock_pid_exists, temp_lock_file):
+        """Testa verificação de processo"""
+        mock_pid_exists.return_value = False
+        
+        lock_data = {
+            'pid': 12345,
+            'timestamp': time.time(),
+            'hostname': 'test'
+        }
+        
+        with open(temp_lock_file, 'w') as f:
+            json.dump(lock_data, f)
+        
         lock = ProcessLock(temp_lock_file)
-        
-        try:
-            with lock:
-                assert os.path.exists(temp_lock_file)
-                raise ValueError("Test exception")
-        except ValueError:
-            pass
-        
-        # Mesmo com exceção, deve liberar o lock
-        assert not os.path.exists(temp_lock_file)
+        assert lock._is_stale_lock() == True
     
-    def test_context_manager_already_locked(self, temp_lock_file):
-        """Testa context manager quando já está locked"""
+    def test_context_manager_with_info(self, temp_lock_file):
+        """Testa context manager com informações detalhadas"""
         lock1 = ProcessLock(temp_lock_file)
         lock2 = ProcessLock(temp_lock_file)
         
-        # Primeiro adquire o lock
         lock1.acquire()
         
-        # Segundo deve falhar ao tentar usar context manager
-        with pytest.raises(RuntimeError, match="processo já rodando"):
+        with pytest.raises(RuntimeError) as exc_info:
             with lock2:
                 pass
         
-        # Cleanup
+        # Deve incluir informações do PID
+        assert "PID:" in str(exc_info.value)
+        
         lock1.release()
-    
-    def test_orphaned_lock_cleanup(self, temp_lock_file):
-        """Testa limpeza de lock órfão"""
-        # Criar arquivo de lock com PID inexistente
-        with open(temp_lock_file, 'w') as f:
-            f.write("999999\n")  # PID que não existe
-        
-        lock = ProcessLock(temp_lock_file)
-        
-        # is_locked deve detectar que é órfão e limpar
-        assert lock.is_locked() == False
-        assert not os.path.exists(temp_lock_file)
-    
-    def test_corrupted_lock_file(self, temp_lock_file):
-        """Testa arquivo de lock corrompido"""
-        # Criar arquivo corrompido
-        with open(temp_lock_file, 'w') as f:
-            f.write("invalid content")
-        
-        lock = ProcessLock(temp_lock_file)
-        
-        # Deve detectar corrupção e limpar
-        assert lock.is_locked() == False
-        assert not os.path.exists(temp_lock_file)

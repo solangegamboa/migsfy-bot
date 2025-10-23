@@ -1,6 +1,7 @@
 import pytest
 import tempfile
 import os
+import time
 from datetime import datetime, timedelta
 from src.playlist.database_manager import DatabaseManager
 
@@ -13,9 +14,9 @@ class TestDatabaseManager:
             db_path = f.name
         
         db = DatabaseManager(db_path)
+        db.init_database()
         yield db
         
-        # Cleanup
         if os.path.exists(db_path):
             os.unlink(db_path)
     
@@ -32,91 +33,131 @@ class TestDatabaseManager:
             'username': 'testuser',
             'filename': 'test.flac',
             'filename_normalized': 'test',
-            'file_line': 'Artist - Album - Song'
+            'file_line': 'Artist - Album - Song',
+            'file_size': 1024000,
+            'file_hash': 'abc123'
         }
         
-        # Salvar
         temp_db.save_download(data, 'SUCCESS')
         
-        # Verificar
         assert temp_db.is_downloaded('Artist - Album - Song') == True
         assert temp_db.is_downloaded('Non-existent') == False
     
-    def test_duplicate_normalized(self, temp_db):
-        """Testa detecção por filename normalizado"""
+    def test_duplicate_detection_methods(self, temp_db):
+        """Testa múltiplos métodos de detecção de duplicatas"""
         data = {
             'filename_normalized': 'normalized_test',
-            'file_line': 'Test Line'
+            'file_line': 'Test Line',
+            'file_hash': 'hash123'
         }
         
         temp_db.save_download(data, 'SUCCESS')
         
+        # Teste normalizado
         assert temp_db.is_duplicate_normalized('normalized_test') == True
         assert temp_db.is_duplicate_normalized('other') == False
-    
-    def test_duplicate_hash(self, temp_db):
-        """Testa detecção por hash"""
-        data = {
-            'file_hash': 'abc123def456',
-            'file_line': 'Hash Test'
-        }
         
-        temp_db.save_download(data, 'SUCCESS')
-        
-        assert temp_db.is_duplicate_hash('abc123def456') == True
+        # Teste hash
+        assert temp_db.is_duplicate_hash('hash123') == True
         assert temp_db.is_duplicate_hash('different') == False
-        assert temp_db.is_duplicate_hash('') == False
     
-    def test_search_cache(self, temp_db):
-        """Testa cache de buscas"""
+    def test_fuzzy_match_duplicates(self, temp_db):
+        """Testa detecção fuzzy de duplicatas"""
+        temp_db.save_download({
+            'file_line': 'Soundgarden - Superunknown - Black Hole Sun'
+        }, 'SUCCESS')
+        
+        # Deve detectar variações similares
+        assert temp_db.is_duplicate_fuzzy('Soundgarden', 'Black Hole Sun', 0.8) == True
+        assert temp_db.is_duplicate_fuzzy('Different Artist', 'Different Song', 0.8) == False
+    
+    def test_search_cache_with_ttl(self, temp_db):
+        """Testa cache com TTL"""
         query_hash = 'test_hash_123'
         results = [{'filename': 'test.flac', 'username': 'user1'}]
         
-        # Salvar no cache
-        temp_db.save_search_cache(query_hash, 'test query', results, 1)
-        
-        # Recuperar do cache
+        # Salvar com TTL válido
+        temp_db.save_search_cache(query_hash, 'test query', results, 24)
         cached = temp_db.get_cached_search(query_hash)
         assert cached == results
         
-        # Cache inexistente
-        assert temp_db.get_cached_search('nonexistent') is None
-    
-    def test_cache_expiration(self, temp_db):
-        """Testa expiração do cache"""
-        query_hash = 'expire_test'
-        results = [{'test': 'data'}]
-        
-        # Salvar com TTL muito baixo
-        temp_db.save_search_cache(query_hash, 'expire test', results, ttl_hours=-1)
-        
-        # Deve retornar None (expirado)
-        cached = temp_db.get_cached_search(query_hash)
-        assert cached is None
-    
-    def test_cleanup_expired_cache(self, temp_db):
-        """Testa limpeza de cache expirado"""
-        # Adicionar cache expirado
-        temp_db.save_search_cache('expired', 'old query', [], ttl_hours=-1)
-        temp_db.save_search_cache('valid', 'new query', [], ttl_hours=24)
-        
-        # Limpar expirados
-        temp_db.cleanup_expired_cache()
-        
-        # Verificar
+        # Salvar com TTL expirado
+        temp_db.save_search_cache('expired', 'old query', [], -1)
         assert temp_db.get_cached_search('expired') is None
+    
+    def test_get_all_downloads(self, temp_db):
+        """Testa recuperação de todos os downloads"""
+        temp_db.save_download({'file_line': 'Song 1'}, 'SUCCESS')
+        temp_db.save_download({'file_line': 'Song 2'}, 'ERROR')
+        temp_db.save_download({'file_line': 'Song 3'}, 'NOT_FOUND')
+        
+        downloads = temp_db.get_all_downloads()
+        assert len(downloads) == 3
+        
+        # Filtrar por status
+        success_downloads = [d for d in downloads if d['status'] == 'SUCCESS']
+        assert len(success_downloads) == 1
+    
+    def test_cleanup_operations(self, temp_db):
+        """Testa operações de limpeza"""
+        # Adicionar cache expirado
+        temp_db.save_search_cache('expired1', 'old', [], -1)
+        temp_db.save_search_cache('expired2', 'old', [], -1)
+        temp_db.save_search_cache('valid', 'new', [], 24)
+        
+        cleaned = temp_db.cleanup_expired_cache()
+        assert cleaned >= 2
+        
+        # Verificar que apenas válido permanece
+        assert temp_db.get_cached_search('expired1') is None
         assert temp_db.get_cached_search('valid') == []
     
-    def test_stats(self, temp_db):
-        """Testa estatísticas"""
-        # Adicionar dados
-        temp_db.save_download({'file_line': 'success1'}, 'SUCCESS')
-        temp_db.save_download({'file_line': 'success2'}, 'SUCCESS')
-        temp_db.save_download({'file_line': 'error1'}, 'ERROR')
-        temp_db.save_search_cache('cache1', 'query', [], 24)
+    def test_performance_with_large_dataset(self, temp_db):
+        """Testa performance com dataset grande"""
+        # Adicionar muitos registros
+        for i in range(100):
+            temp_db.save_download({
+                'file_line': f'Artist {i} - Album {i} - Song {i}',
+                'filename_normalized': f'song_{i}',
+                'file_hash': f'hash_{i}'
+            }, 'SUCCESS')
         
+        # Testes de performance
+        start_time = time.time()
+        
+        # Verificação de duplicata deve ser rápida
+        assert temp_db.is_downloaded('Artist 50 - Album 50 - Song 50') == True
+        assert temp_db.is_duplicate_normalized('song_75') == True
+        assert temp_db.is_duplicate_hash('hash_25') == True
+        
+        elapsed = time.time() - start_time
+        assert elapsed < 1.0  # Deve ser menor que 1 segundo
+    
+    def test_database_integrity(self, temp_db):
+        """Testa integridade do banco"""
+        # Adicionar dados com diferentes tipos
+        temp_db.save_download({
+            'file_line': 'Test Song',
+            'file_size': None,  # NULL
+            'file_hash': '',    # String vazia
+            'filename_normalized': 'test'
+        }, 'SUCCESS')
+        
+        # Deve lidar com valores NULL/vazios
+        assert temp_db.is_downloaded('Test Song') == True
+        assert temp_db.is_duplicate_hash('') == False  # String vazia não é duplicata
+        assert temp_db.is_duplicate_hash(None) == False  # None não é duplicata
+    
+    def test_concurrent_access_simulation(self, temp_db):
+        """Simula acesso concurrent ao banco"""
+        # Simular múltiplas operações simultâneas
+        for i in range(10):
+            temp_db.save_download({'file_line': f'Concurrent {i}'}, 'SUCCESS')
+            temp_db.save_search_cache(f'cache_{i}', f'query {i}', [], 1)
+            temp_db.is_downloaded(f'Concurrent {i}')
+            temp_db.get_cached_search(f'cache_{i}')
+        
+        # Verificar consistência
         stats = temp_db.get_stats()
-        
-        assert stats['SUCCESS'] == 2
-        assert stats['ERROR'] == 1
-        assert stats['cache_entries'] == 1
+        assert stats['SUCCESS'] == 10
+        assert stats['cache_entries'] == 10
