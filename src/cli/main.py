@@ -1603,17 +1603,18 @@ def smart_mp3_search(slskd, query):
                 slskd, search_id, max_wait=int(os.getenv("SEARCH_WAIT_TIME", 25))
             )
 
-            if not search_responses:
-                print("❌ Nenhuma resposta")
-                cleanup_search(slskd, search_id)
-                continue
-
             # Conta total de arquivos encontrados
             total_files = sum(
                 len(response.get("files", [])) for response in search_responses
-            )
+            ) if search_responses else 0
 
             print(f"📊 Total de arquivos encontrados: {total_files}")
+
+            # Se não encontrou nenhum arquivo, continua para próxima busca
+            if total_files == 0:
+                print("❌ Nenhum arquivo encontrado - tentando próxima variação")
+                cleanup_search(slskd, search_id)
+                continue
 
             # Score mínimo configurável
             min_score = int(os.getenv("MIN_MP3_SCORE", 15))
@@ -1631,27 +1632,21 @@ def smart_mp3_search(slskd, query):
                     slskd, search_responses, best_file, best_user, query
                 )
                 
-                # Limpa busca atual
                 cleanup_search(slskd, search_id)
                 
                 if success:
-                    print(f"✅ Sucesso com '{search_term}' - cancelando buscas restantes!")
+                    print(f"✅ Sucesso com '{search_term}' - parando buscas!")
                     return True
                 else:
-                    print(f"❌ Falha no download - continuando...")
+                    print(f"❌ Falha no download - tentando próxima variação")
             else:
-                print(f"❌ Nenhum MP3 adequado (score: {best_score:.1f}) - continuando...")
+                print(f"❌ Nenhum MP3 adequado (score: {best_score:.1f}) - tentando próxima variação")
                 cleanup_search(slskd, search_id)
 
         except Exception as e:
             print(f"❌ Erro na busca: {e}")
             if search_id:
                 cleanup_search(slskd, search_id)
-
-        # Pausa maior entre buscas para evitar sobrecarga
-        if i < len(variations):
-            print("⏸️ Pausa entre buscas...")
-            time.sleep(3)
 
     return False
 
@@ -1687,77 +1682,78 @@ def smart_album_search(slskd, query):
                 slskd, search_id, max_wait=int(os.getenv("SEARCH_WAIT_TIME", 25))
             )
 
-            if not search_responses:
-                print("❌ Nenhuma resposta")
-                cleanup_search(slskd, search_id)
-                continue
-
             # Conta total de arquivos encontrados
             total_files = sum(
                 len(response.get("files", [])) for response in search_responses
-            )
+            ) if search_responses else 0
+            
             print(f"📊 Total de arquivos encontrados: {total_files}")
 
-            if total_files > 0:
-                # Para álbuns, procura por múltiplos arquivos do mesmo usuário/diretório
-                album_candidates = find_album_candidates(search_responses, query)
+            # Se não encontrou nenhum arquivo, continua para próxima busca
+            if total_files == 0:
+                print("❌ Nenhum arquivo encontrado - tentando próxima variação")
+                cleanup_search(slskd, search_id)
+                continue
 
-                if album_candidates:
-                    print(f"💿 Encontrados {len(album_candidates)} candidatos a álbum")
+            # Para álbuns, procura por múltiplos arquivos do mesmo usuário/diretório
+            album_candidates = find_album_candidates(search_responses, query)
 
-                    # Ordena por número de faixas e qualidade
-                    album_candidates.sort(
-                        key=lambda x: (x["track_count"], x["avg_bitrate"]), reverse=True
-                    )
+            if album_candidates:
+                print(f"💿 Encontrados {len(album_candidates)} candidatos a álbum")
 
-                    best_album = album_candidates[0]
-                    print(f"\n🎵 Melhor álbum encontrado:")
-                    print(f"   👤 Usuário: {best_album['username']}")
-                    print(f"   📁 Diretório: {best_album['directory']}")
-                    print(f"   🎵 Faixas: {best_album['track_count']}")
-                    print(f"   🎧 Bitrate médio: {best_album['avg_bitrate']:.0f} kbps")
-                    print(
-                        f"   💾 Tamanho total: {best_album['total_size'] / 1024 / 1024:.1f} MB"
-                    )
-
-                    # Pergunta se quer baixar o álbum completo
-                    print(
-                        f"\n🤔 Deseja baixar o álbum completo ({best_album['track_count']} faixas)?"
-                    )
-                    confirm = input("Digite 'sim' para continuar: ").lower().strip()
-
-                    cleanup_search(slskd, search_id)
-
-                    if confirm in ["sim", "s", "yes", "y"]:
-                        success = download_album_tracks(slskd, best_album, query)
-                        if success:
-                            print(f"✅ Sucesso com álbum '{search_term}' - cancelando buscas restantes!")
-                            return True
-                    else:
-                        print("❌ Download cancelado pelo usuário")
-                        return False
-
-                # Se não encontrou álbum completo, tenta download individual
-                best_file, best_user, best_score = find_best_mp3(
-                    search_responses, query
+                # Ordena por número de faixas e qualidade
+                album_candidates.sort(
+                    key=lambda x: (x["track_count"], x["avg_bitrate"]), reverse=True
                 )
 
-                if best_file and best_score > 10:  # Score mais baixo para álbuns
-                    print(
-                        f"\n🎵 Arquivo individual encontrado (score: {best_score:.1f}):"
-                    )
-                    print(f"   👤 Usuário: {best_user}")
-                    print(f"   📄 Arquivo: {best_file.get('filename')}")
+                best_album = album_candidates[0]
+                print(f"\n🎵 Melhor álbum encontrado:")
+                print(f"   👤 Usuário: {best_album['username']}")
+                print(f"   📁 Diretório: {best_album['directory']}")
+                print(f"   🎵 Faixas: {best_album['track_count']}")
+                print(f"   🎧 Bitrate médio: {best_album['avg_bitrate']:.0f} kbps")
+                print(
+                    f"   💾 Tamanho total: {best_album['total_size'] / 1024 / 1024:.1f} MB"
+                )
 
-                    success = smart_download_with_fallback(
-                        slskd, search_responses, best_file, best_user, query
-                    )
-                    
-                    cleanup_search(slskd, search_id)
-                    
+                # Pergunta se quer baixar o álbum completo
+                print(
+                    f"\n🤔 Deseja baixar o álbum completo ({best_album['track_count']} faixas)?"
+                )
+                confirm = input("Digite 'sim' para continuar: ").lower().strip()
+
+                cleanup_search(slskd, search_id)
+
+                if confirm in ["sim", "s", "yes", "y"]:
+                    success = download_album_tracks(slskd, best_album, query)
                     if success:
-                        print(f"✅ Sucesso com '{search_term}' - cancelando buscas restantes!")
+                        print(f"✅ Sucesso com álbum '{search_term}' - parando buscas!")
                         return True
+                else:
+                    print("❌ Download cancelado pelo usuário")
+                    return False
+
+            # Se não encontrou álbum completo, tenta download individual
+            best_file, best_user, best_score = find_best_mp3(
+                search_responses, query
+            )
+
+            if best_file and best_score > 10:  # Score mais baixo para álbuns
+                print(
+                    f"\n🎵 Arquivo individual encontrado (score: {best_score:.1f}):"
+                )
+                print(f"   👤 Usuário: {best_user}")
+                print(f"   📄 Arquivo: {best_file.get('filename')}")
+
+                success = smart_download_with_fallback(
+                    slskd, search_responses, best_file, best_user, query
+                )
+                
+                cleanup_search(slskd, search_id)
+                
+                if success:
+                    print(f"✅ Sucesso com '{search_term}' - parando buscas!")
+                    return True
             else:
                 cleanup_search(slskd, search_id)
 
@@ -1765,11 +1761,6 @@ def smart_album_search(slskd, query):
             print(f"❌ Erro na busca: {e}")
             if search_id:
                 cleanup_search(slskd, search_id)
-
-        # Pausa entre buscas
-        if i < len(variations):
-            print("⏸️ Pausa entre buscas...")
-            time.sleep(3)
 
     return False
 
@@ -2008,52 +1999,46 @@ def smart_audiobook_search(slskd, query, custom_dir=None):
                 slskd, search_id, max_wait=int(os.getenv("SEARCH_WAIT_TIME", 30))
             )
             
-            if not search_responses:
-                print("❌ Nenhuma resposta")
+            total_files = sum(len(response.get("files", [])) for response in search_responses) if search_responses else 0
+            print(f"📊 Total de arquivos encontrados: {total_files}")
+            
+            # Se não encontrou nenhum arquivo, continua para próxima busca
+            if total_files == 0:
+                print("❌ Nenhum arquivo encontrado - tentando próxima variação")
                 cleanup_search(slskd, search_id)
                 continue
             
-            total_files = sum(len(response.get("files", [])) for response in search_responses)
-            print(f"📊 Total de arquivos encontrados: {total_files}")
+            best_file, best_user, best_score = find_best_audiobook(search_responses, query)
             
-            if total_files > 0:
-                best_file, best_user, best_score = find_best_audiobook(search_responses, query)
+            min_score = int(os.getenv("MIN_AUDIOBOOK_SCORE", 20))
+            
+            if best_file and best_score > min_score:
+                print(f"\n📚 Melhor audiobook (score: {best_score:.1f}):")
+                print(f"   👤 Usuário: {best_user}")
+                print(f"   📄 Arquivo: {best_file.get('filename')}")
+                print(f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB")
                 
-                min_score = int(os.getenv("MIN_AUDIOBOOK_SCORE", 20))
+                # Download com diretório personalizado
+                success = download_audiobook(
+                    slskd, best_user, best_file.get('filename'), 
+                    best_file.get('size', 0), query, custom_dir
+                )
                 
-                if best_file and best_score > min_score:
-                    print(f"\n📚 Melhor audiobook (score: {best_score:.1f}):")
-                    print(f"   👤 Usuário: {best_user}")
-                    print(f"   📄 Arquivo: {best_file.get('filename')}")
-                    print(f"   💾 Tamanho: {best_file.get('size', 0) / 1024 / 1024:.2f} MB")
-                    
-                    # Download com diretório personalizado
-                    success = download_audiobook(
-                        slskd, best_user, best_file.get('filename'), 
-                        best_file.get('size', 0), query, custom_dir
-                    )
-                    
-                    cleanup_search(slskd, search_id)
-                    
-                    if success:
-                        print(f"✅ Sucesso com '{search_term}' - cancelando buscas restantes!")
-                        return True
-                    else:
-                        print(f"❌ Falha no download - continuando...")
+                cleanup_search(slskd, search_id)
+                
+                if success:
+                    print(f"✅ Sucesso com '{search_term}' - parando buscas!")
+                    return True
                 else:
-                    print(f"❌ Nenhum audiobook adequado (score: {best_score:.1f}) - continuando...")
-                    cleanup_search(slskd, search_id)
+                    print(f"❌ Falha no download - tentando próxima variação")
             else:
+                print(f"❌ Nenhum audiobook adequado (score: {best_score:.1f}) - tentando próxima variação")
                 cleanup_search(slskd, search_id)
         
         except Exception as e:
             print(f"❌ Erro na busca: {e}")
             if search_id:
                 cleanup_search(slskd, search_id)
-        
-        if i < len(variations):
-            print("⏸️ Pausa entre buscas...")
-            time.sleep(3)
     
     return False
 
