@@ -344,6 +344,63 @@ class PlaylistProcessor:
             print(f"⚠️ Erro ao procurar na fila: {e}")
             return None, None
 
+    def check_download_status_before_search(self, slskd, target_filename, target_username):
+        """Verifica status de download específico antes de iniciar busca"""
+        try:
+            downloads = slskd.transfers.get_all_downloads()
+            
+            for download in downloads:
+                dl_username = download.get('username', '')
+                
+                if dl_username != target_username:
+                    continue
+                    
+                directories = download.get('directories', [])
+                
+                for directory in directories:
+                    files = directory.get('files', [])
+                    
+                    for file_info in files:
+                        dl_filename = file_info.get('filename', '')
+                        dl_state = file_info.get('state', '')
+                        file_id = file_info.get('id', '')
+                        
+                        # Normaliza paths para comparação (remove escapes)
+                        normalized_target = target_filename.replace('\\\\', '\\')
+                        normalized_dl = dl_filename.replace('\\\\', '\\')
+                        
+                        if normalized_target == normalized_dl:
+                            print(f"📥 Arquivo encontrado na fila: {os.path.basename(dl_filename)}")
+                            print(f"    Status: {dl_state} | ID: {file_id}")
+                            
+                            if dl_state == "Completed, Succeeded":
+                                print(f"✅ Download já completado com sucesso")
+                                # Remove da fila
+                                self.remove_completed_download(slskd, dl_username, file_id)
+                                return "completed"
+                            elif dl_state in ["Completed, Errored", "Completed, Canceled"]:
+                                print(f"❌ Download falhou anteriormente: {dl_state}")
+                                return "failed"
+                            else:
+                                print(f"⏳ Download em progresso: {dl_state}")
+                                return "in_progress"
+            
+            return "not_found"
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao verificar status: {e}")
+            return "error"
+
+    def remove_completed_download(self, slskd, username, file_id):
+        """Remove download completado da fila"""
+        try:
+            # Nota: A API do slskd pode não ter método direto para remover arquivo específico
+            # Implementação depende da API disponível
+            print(f"🗑️ Removendo download completado (ID: {file_id})")
+            # slskd.transfers.remove_download(username, file_id)  # Se disponível
+        except Exception as e:
+            print(f"⚠️ Erro ao remover download: {e}")
+
     def download_track(self, slskd, line):
         """Baixa uma música e aguarda confirmação de sucesso"""
         try:
@@ -383,14 +440,39 @@ class PlaylistProcessor:
                     )
 
                     if best_file and best_score > 15:
-                        success = smart_download_with_fallback(
-                            slskd, search_responses, best_file, best_user, line
+                        target_filename = best_file.get("filename")
+                        target_username = best_user
+                        
+                        print(f"🎯 Arquivo encontrado:")
+                        print(f"   📄 Arquivo: {target_filename}")
+                        print(f"   👤 Usuário principal: {target_username}")
+                        
+                        # Verifica status antes de fazer download
+                        status = self.check_download_status_before_search(
+                            slskd, target_filename, target_username
                         )
-                        if success:
-                            # Aguarda confirmação de download
+                        
+                        if status == "completed":
+                            print(f"✅ Download já foi completado - marcando como sucesso")
+                            return True
+                        elif status == "failed":
+                            print(f"❌ Download falhou anteriormente - marcando como falha")
+                            return False
+                        elif status == "in_progress":
+                            print(f"⏳ Download em progresso - aguardando...")
                             return self.wait_for_download_completion(
-                                slskd, best_file.get("filename"), best_user
+                                slskd, target_filename, target_username
                             )
+                        else:
+                            # Não encontrado na fila, procede com download normal
+                            success = smart_download_with_fallback(
+                                slskd, search_responses, best_file, best_user, line
+                            )
+                            if success:
+                                # Aguarda confirmação de download
+                                return self.wait_for_download_completion(
+                                    slskd, target_filename, target_username
+                                )
 
                 except Exception:
                     continue
