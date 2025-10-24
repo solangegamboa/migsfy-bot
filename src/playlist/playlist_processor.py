@@ -502,7 +502,9 @@ class PlaylistProcessor:
         if artist and album and filename:
             organize_success = self.file_organizer.organize_file(filename, artist, album)
             if organize_success:
-                print(f"📁 Arquivo organizado: {artist}/{album}/{os.path.basename(filename)}")
+                # Usar apenas nome base do arquivo no log
+                base_filename = os.path.basename(filename.replace('\\', '/'))
+                print(f"📁 Arquivo organizado: {artist}/{album}/{base_filename}")
             else:
                 print(f"⚠️ Falha ao organizar arquivo: {filename}")
 
