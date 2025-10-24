@@ -173,6 +173,18 @@ class DatabaseManager:
             
             return stats
     
+    def get_successful_downloads(self):
+        """Retorna todos os downloads com sucesso"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT filename, file_line, username, file_size, created_at
+                FROM downloads 
+                WHERE status = 'SUCCESS'
+                ORDER BY created_at DESC
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+    
     def _generate_id(self) -> str:
         """Gera ID único"""
         return hashlib.md5(f"{datetime.now().isoformat()}".encode()).hexdigest()

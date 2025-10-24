@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .database_manager import DatabaseManager
 from .duplicate_detector import DuplicateDetector
+from .file_organizer import FileOrganizer
 from .process_lock import ProcessLock
 from .slskd_api_client import SlskdApiClient
 
@@ -23,6 +24,7 @@ class PlaylistProcessor:
         self.duplicate_detector = DuplicateDetector(self.db_manager)
         self.slskd_client = SlskdApiClient(self.db_manager)
         self.process_lock = ProcessLock(self.lock_path)
+        self.file_organizer = FileOrganizer()
 
         # Estatísticas
         self.stats = {
@@ -491,6 +493,18 @@ class PlaylistProcessor:
     ):
         """Trata sucesso do download"""
         print(f"✅ Download concluído com sucesso")
+
+        # Extrair informações para organização
+        artist, album, song = self._parse_file_line(file_line)
+        filename = download_info.get("filename", "")
+        
+        # Organizar arquivo baixado
+        if artist and album and filename:
+            organize_success = self.file_organizer.organize_file(filename, artist, album)
+            if organize_success:
+                print(f"📁 Arquivo organizado: {artist}/{album}/{os.path.basename(filename)}")
+            else:
+                print(f"⚠️ Falha ao organizar arquivo: {filename}")
 
         # Salvar no banco
         self.db_manager.save_download(

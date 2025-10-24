@@ -11,6 +11,7 @@ __author__ = "Solia Assistant"
 # Importar classes implementadas
 from .database_manager import DatabaseManager
 from .duplicate_detector import DuplicateDetector
+from .file_organizer import FileOrganizer
 from .process_lock import ProcessLock
 from .rate_limiter import RateLimiter
 from .cache_manager import CacheManager
@@ -19,7 +20,8 @@ from .playlist_processor import PlaylistProcessor
 
 __all__ = [
     "DatabaseManager",
-    "DuplicateDetector", 
+    "DuplicateDetector",
+    "FileOrganizer", 
     "ProcessLock",
     "RateLimiter",
     "CacheManager",
