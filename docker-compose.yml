@@ -16,7 +16,7 @@ services:
     # Volumes for data persistence - mount only data directories
     volumes:
       - /DATA/AppData/migsfy:/app/data
-      - /media/devmon/SOLAR/media/:/media
+      - /media/devmon/SOLAR/media:/media
       - ./.env:/app/.env:ro
 
     # Network configuration

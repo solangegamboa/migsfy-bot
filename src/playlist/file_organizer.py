@@ -48,6 +48,8 @@ class FileOrganizer:
             base_name = os.path.basename(file_name.replace('\\', '/'))
             
             cmd = ["find", self.slskd_path, "-type", "f", "-name", f"*{base_name}"]
+            logger.info(f"Buscando arquivo: {' '.join(cmd)}")
+            
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             
             files = result.stdout.strip().split('\n')
