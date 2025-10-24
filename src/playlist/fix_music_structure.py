@@ -6,6 +6,7 @@ Script para corrigir estrutura de pastas em /media/music usando dados da base SQ
 import os
 import sys
 import shutil
+import subprocess
 import logging
 from pathlib import Path
 
@@ -101,11 +102,19 @@ class MusicStructureFixer:
             return False
             
     def _find_file_in_music(self, file_name):
-        """Procura arquivo em /media/music"""
-        for root, dirs, files in os.walk(self.music_path):
-            if file_name in files:
-                return Path(root) / file_name
-        return None
+        """Procura arquivo em /media/music usando find"""
+        try:
+            # Extrair apenas o nome do arquivo
+            base_name = os.path.basename(file_name.replace('\\', '/'))
+            
+            cmd = ["find", self.music_path, "-type", "f", "-name", f"*{base_name}"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            files = result.stdout.strip().split('\n')
+            return Path(files[0]) if files and files[0] else None
+            
+        except subprocess.CalledProcessError:
+            return None
         
     def _cleanup_empty_dirs(self, path):
         """Remove pastas vazias"""
