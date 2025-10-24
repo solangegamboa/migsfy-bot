@@ -44,7 +44,10 @@ class FileOrganizer:
     def _find_file(self, file_name):
         """Procura arquivo usando find command"""
         try:
-            cmd = ["find", self.slskd_path, "-type", "f", "-name", f"*{file_name}"]
+            # Extrair apenas o nome do arquivo (última parte após \ ou /)
+            base_name = os.path.basename(file_name.replace('\\', '/'))
+            
+            cmd = ["find", self.slskd_path, "-type", "f", "-name", f"*{base_name}"]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             
             files = result.stdout.strip().split('\n')
