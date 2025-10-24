@@ -15,12 +15,12 @@ class FileOrganizer:
         """Organiza arquivo baixado para estrutura ARTISTA/ALBUM/musica.ext"""
         try:
             # Extrai nome do arquivo do filename completo
-            file_name = os.path.basename(filename)
+            file_name = os.path.basename(filename.replace('\\', '/'))
             
             # Procura arquivo usando find
-            found_file = self._find_file(file_name)
+            found_file = self._find_file(filename)
             if not found_file:
-                logger.error(f"Arquivo não encontrado: {file_name}")
+                logger.error(f"Arquivo não encontrado: {filename}")
                 return False
             
             # Cria estrutura de pastas
@@ -30,7 +30,7 @@ class FileOrganizer:
             artist_path.mkdir(parents=True, exist_ok=True)
             album_path.mkdir(parents=True, exist_ok=True)
             
-            # Move arquivo
+            # Move arquivo mantendo apenas o nome base
             dest_file = album_path / file_name
             shutil.move(found_file, dest_file)
             
